@@ -3,15 +3,16 @@ import os
 import openai
 import time
 
-if st.button("Debug Secrets"):
-    st.write("Secrets keys:", list(st.secrets.keys()))
+st.write("Secrets keys available:", list(st.secrets.keys()))
 
 
-
-# Check if OPENAI_API_KEY is set 
+# Fetch the OpenAI API key from Streamlit secrets
 openai_api_key = st.secrets["openai_api_key"]
+
 if not openai_api_key:
-    raise EnvironmentError("Error: OPENAI_API_KEY is not set in the Streamlit secrets file.")
+    st.error("OpenAI API key not found. Please configure secrets.")
+else:
+    st.success("OpenAI API key loaded successfully.")
 
 # Initialize OpenAI client
 client = openai.OpenAI(api_key=openai_api_key)
