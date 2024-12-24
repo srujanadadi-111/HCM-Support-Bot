@@ -107,7 +107,7 @@ def wait_for_run_completion(client, thread_id, run_id, max_attempts=500, delay=5
 st.title("HCM Support Bot")
 
 # Input: Vector Store Name
-vector_store_name = st.text_input("Enter Vector Store Name:", "DocumentResearchStore")
+vector_store_name = "DocumentResearchStore"
 
 # Download PDFs from Google Drive and save locally
 downloaded_files = []
