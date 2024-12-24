@@ -1,10 +1,6 @@
 import streamlit as st
-import os
 import openai
 import time
-
-#st.write("Secrets keys available:", list(st.secrets.keys()))
-
 
 # Fetch the OpenAI API key from Streamlit secrets
 openai_api_key = st.secrets["openai_api_key"]
@@ -19,33 +15,25 @@ client = openai.OpenAI(api_key=openai_api_key)
 
 MODEL_NAME = "gpt-3.5-turbo"
 
-# Helper functions for uploading PDFs, creating vector store, etc.
-def upload_pdfs_to_vector_store(client, vector_store_id, directory_path):
-    try:
-        if not os.path.exists(directory_path):
-            raise FileNotFoundError(f"Error: Directory '{directory_path}' does not exist.")
-        
-        pdf_files = [
-            os.path.join(directory_path, file) 
-            for file in os.listdir(directory_path) 
-            if file.lower().endswith(".pdf")
-        ]
-        
-        if not pdf_files:
-            st.warning("No PDF files found in directory.")
-            return {}
+# Hardcoded Google Drive PDF file links
+pdf_files = [
+    "https://drive.google.com/uc?id=1VR9AppuVbuli0d_8_VMP83sXW6GxBq4v"
+]
 
+# Helper function to create the vector store from the PDFs
+def upload_pdfs_to_vector_store(client, vector_store_id, pdf_files):
+    try:
         file_ids = {}
-        for file_path in pdf_files:
+        for file_url in pdf_files:
             try:
-                with open(file_path, "rb") as file:
-                    uploaded_file = client.beta.vector_stores.files.upload(
-                        vector_store_id=vector_store_id, 
-                        file=file
-                    )
-                file_ids[os.path.basename(file_path)] = uploaded_file.id
+                # Download the file and upload it to the vector store
+                uploaded_file = client.beta.vector_stores.files.upload(
+                    vector_store_id=vector_store_id, 
+                    file_url=file_url
+                )
+                file_ids[file_url] = uploaded_file.id
             except Exception as file_error:
-                st.error(f"Error uploading {file_path}: {file_error}")
+                st.error(f"Error uploading file {file_url}: {file_error}")
         
         return file_ids
 
@@ -53,6 +41,7 @@ def upload_pdfs_to_vector_store(client, vector_store_id, directory_path):
         st.error(f"Error in file upload process: {e}")
         return {}
 
+# Function to create or retrieve a vector store
 def get_or_create_vector_store(client, vector_store_name):
     try:
         vector_stores = client.beta.vector_stores.list()
@@ -64,6 +53,7 @@ def get_or_create_vector_store(client, vector_store_name):
         st.error(f"Error managing vector store: {e}")
         return None
 
+# Function to create an assistant for querying the PDFs
 def create_assistant(client, model_name, vector_store_id):
     try:
         assistant = client.beta.assistants.create(
@@ -80,66 +70,28 @@ def create_assistant(client, model_name, vector_store_id):
         st.error(f"Error creating assistant: {e}")
         return None
 
-def wait_for_run_completion(client, thread_id, run_id, max_attempts=500, delay=5):
-    for attempt in range(max_attempts):
-        try:
-            run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
-            if run.status == 'completed':
-                return run.status
-            if run.status == 'failed':
-                st.error("Run Failed. Check error details.")
-                return run.status
-            time.sleep(delay)
-        except Exception as e:
-            st.error(f"Error checking run status: {e}")
-            return 'error'
-    return 'timeout'
-
 # Streamlit UI
 st.title("HCM Support Bot")
 
-vector_store_name = "DocumentResearchStore"
+# Input: Vector Store Name
+vector_store_name = st.text_input("Enter Vector Store Name:", "DocumentResearchStore")
 
-# Helper functions for uploading PDFs, creating vector store, etc.
-def upload_pdfs_to_vector_store(client, vector_store_id, directory_path):
-    try:
-        if not os.path.exists(directory_path):
-            raise FileNotFoundError(f"Error: Directory '{directory_path}' does not exist.")
-        
-        pdf_files = [
-            os.path.join(directory_path, file) 
-            for file in os.listdir(directory_path) 
-            if file.lower().endswith(".pdf")
-        ]
-        
-        if not pdf_files:
-            st.warning("No PDF files found in directory.")
-            return {}
+# Upload PDF files to the vector store
+vector_store = get_or_create_vector_store(client, vector_store_name)
+if vector_store:
+    file_ids = upload_pdfs_to_vector_store(client, vector_store.id, pdf_files)
+    if file_ids:
+        st.success(f"Uploaded {len(file_ids)} files successfully.")
+    else:
+        st.warning("No files uploaded.")
+else:
+    st.error("Failed to create or retrieve vector store.")
 
-        file_ids = {}
-        for file_path in pdf_files:
-            try:
-                with open(file_path, "rb") as file:
-                    uploaded_file = client.beta.vector_stores.files.upload(
-                        vector_store_id=vector_store_id, 
-                        file=file
-                    )
-                file_ids[os.path.basename(file_path)] = uploaded_file.id
-            except Exception as file_error:
-                st.error(f"Error uploading {file_path}: {file_error}")
-        
-        return file_ids
-
-    except Exception as e:
-        st.error(f"Error in file upload process: {e}")
-        return {}
-        
 # Assistant Interaction
 st.subheader("Chat with the Assistant")
 assistant_query = st.text_area("Enter your question:")
 
 if st.button("Ask"):
-    vector_store = get_or_create_vector_store(client, vector_store_name)
     if vector_store:
         assistant = create_assistant(client, MODEL_NAME, vector_store.id)
         if assistant and assistant_query.strip():
