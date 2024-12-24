@@ -4,9 +4,9 @@ import openai
 import time
 
 # Check if OPENAI_API_KEY is set 
-openai_api_key = "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"
+openai_api_key = st.secrets["openai_api_key"]
 if not openai_api_key:
-    raise EnvironmentError("Error: OPENAI_API_KEY is not set in the environment. Please set it in the .env file.")
+    raise EnvironmentError("Error: OPENAI_API_KEY is not set in the Streamlit secrets file.")
 
 # Initialize OpenAI client
 client = openai.OpenAI(api_key=openai_api_key)
