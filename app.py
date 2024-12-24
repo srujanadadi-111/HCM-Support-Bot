@@ -19,7 +19,14 @@ MODEL_NAME = "gpt-3.5-turbo"
 
 # Hardcoded Google Drive PDF file links
 pdf_files = [
-    "https://drive.google.com/uc?id=1VR9AppuVbuli0d_8_VMP83sXW6GxBq4v"
+    "https://drive.google.com/uc?id=1VR9AppuVbuli0d_8_VMP83sXW6GxBq4v",
+    "https://drive.google.com/uc?id=1ET7BcoCts75yevG76tgWxzbrspF9MeZ9",
+    "https://drive.google.com/uc?id=1OIBuluuqEuM4AMRxVRLBlOeax5IjkQF0",
+    "https://drive.google.com/uc?id=15bBXXAoYHi0pc57ZZmo8UqhNjlZRHjrm",
+    "https://drive.google.com/uc?id=1obv8-kbBqX6Ucp7ciRP4ZOZ-9keq1OlJ",
+    "https://drive.google.com/uc?id=1vrHy5tX2h65l6cC_PW-vDDHdO5r1KHST"
+    
+    
 ]
 
 # Helper function to download a PDF from Google Drive
