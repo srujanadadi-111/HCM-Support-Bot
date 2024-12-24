@@ -4,7 +4,8 @@ import openai
 import time
 
 if st.button("Debug Secrets"):
-    st.write("Secrets available:", st.secrets)
+    st.write("Secrets keys:", list(st.secrets.keys()))
+
 
 
 # Check if OPENAI_API_KEY is set 
