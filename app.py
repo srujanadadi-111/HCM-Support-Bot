@@ -98,6 +98,8 @@ def wait_for_run_completion(client, thread_id, run_id, max_attempts=500, delay=5
 # Streamlit UI
 st.title("HCM Support Bot")
 
+vector_store_name = "DocumentResearchStore"
+
 # File Upload Section
 st.subheader("Upload PDFs")
 uploaded_files = st.file_uploader("Choose PDF files", type="pdf", accept_multiple_files=True)
