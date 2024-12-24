@@ -87,6 +87,22 @@ def create_assistant(client, model_name, vector_store_id):
         st.error(f"Error creating assistant: {e}")
         return None
 
+# Function to wait for the completion of the run
+def wait_for_run_completion(client, thread_id, run_id, max_attempts=500, delay=5):
+    for attempt in range(max_attempts):
+        try:
+            run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
+            if run.status == 'completed':
+                return run.status
+            if run.status == 'failed':
+                st.error("Run Failed. Check error details.")
+                return run.status
+            time.sleep(delay)
+        except Exception as e:
+            st.error(f"Error checking run status: {e}")
+            return 'error'
+    return 'timeout'
+
 # Streamlit UI
 st.title("HCM Support Bot")
 
