@@ -106,35 +106,34 @@ def wait_for_run_completion(client, thread_id, run_id, max_attempts=500, delay=5
 # Streamlit UI
 st.title("HCM Support Bot")
 
-# Input: Vector Store Name
+# Vector Store Name (this can be hardcoded as well)
 vector_store_name = "DocumentResearchStore"
 
-# Download PDFs from Google Drive and save locally
+# Automatically download PDFs from Google Drive and save locally
 downloaded_files = []
-if st.button("Download and Upload PDFs"):
-    vector_store = get_or_create_vector_store(client, vector_store_name)
-    
-    if vector_store is not None:
-        for pdf_file in pdf_files:
-            file_name = pdf_file.split("=")[-1] + ".pdf"  # Derive file name from the ID
-            file_path = os.path.join("./downloads", file_name)
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-            
-            downloaded_file = download_pdf_from_drive(pdf_file, file_path)
-            if downloaded_file:
-                downloaded_files.append(downloaded_file)
+vector_store = get_or_create_vector_store(client, vector_store_name)
 
-        # Now upload the downloaded files to the vector store
-        if downloaded_files:
-            file_ids = upload_pdfs_to_vector_store(client, vector_store.id, downloaded_files)
-            if file_ids:
-                st.success(f"Uploaded {len(file_ids)} files successfully.")
-            else:
-                st.warning("No files uploaded.")
+if vector_store is not None:
+    for pdf_file in pdf_files:
+        file_name = pdf_file.split("=")[-1] + ".pdf"  # Derive file name from the ID
+        file_path = os.path.join("./downloads", file_name)
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        
+        downloaded_file = download_pdf_from_drive(pdf_file, file_path)
+        if downloaded_file:
+            downloaded_files.append(downloaded_file)
+
+    # Now upload the downloaded files to the vector store
+    if downloaded_files:
+        file_ids = upload_pdfs_to_vector_store(client, vector_store.id, downloaded_files)
+        if file_ids:
+            st.success(f"Uploaded {len(file_ids)} files successfully.")
         else:
-            st.warning("No PDFs were downloaded.")
+            st.warning("No files uploaded.")
     else:
-        st.error("Failed to create or retrieve vector store.")
+        st.warning("No PDFs were downloaded.")
+else:
+    st.error("Failed to create or retrieve vector store.")
 
 # Assistant Interaction
 st.subheader("Chat with the Assistant")
