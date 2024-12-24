@@ -100,30 +100,40 @@ st.title("HCM Support Bot")
 
 vector_store_name = "DocumentResearchStore"
 
-# File Upload Section
-st.subheader("Upload PDFs")
-uploaded_files = st.file_uploader("Choose PDF files", type="pdf", accept_multiple_files=True)
+# Helper functions for uploading PDFs, creating vector store, etc.
+def upload_pdfs_to_vector_store(client, vector_store_id, directory_path):
+    try:
+        if not os.path.exists(directory_path):
+            raise FileNotFoundError(f"Error: Directory '{directory_path}' does not exist.")
+        
+        pdf_files = [
+            os.path.join(directory_path, file) 
+            for file in os.listdir(directory_path) 
+            if file.lower().endswith(".pdf")
+        ]
+        
+        if not pdf_files:
+            st.warning("No PDF files found in directory.")
+            return {}
 
-if st.button("Upload"):
-    vector_store = get_or_create_vector_store(client, vector_store_name)
-    if vector_store:
-        if uploaded_files:
-            upload_dir = "./uploads"
-            os.makedirs(upload_dir, exist_ok=True)
-            for uploaded_file in uploaded_files:
-                file_path = os.path.join(upload_dir, uploaded_file.name)
-                with open(file_path, "wb") as f:
-                    f.write(uploaded_file.read())
-            file_ids = upload_pdfs_to_vector_store(client, vector_store.id, upload_dir)
-            if file_ids:
-                st.success(f"Uploaded {len(file_ids)} files successfully.")
-            else:
-                st.warning("No files uploaded.")
-        else:
-            st.warning("Please upload at least one PDF.")
-    else:
-        st.error("Failed to create or retrieve vector store.")
+        file_ids = {}
+        for file_path in pdf_files:
+            try:
+                with open(file_path, "rb") as file:
+                    uploaded_file = client.beta.vector_stores.files.upload(
+                        vector_store_id=vector_store_id, 
+                        file=file
+                    )
+                file_ids[os.path.basename(file_path)] = uploaded_file.id
+            except Exception as file_error:
+                st.error(f"Error uploading {file_path}: {file_error}")
+        
+        return file_ids
 
+    except Exception as e:
+        st.error(f"Error in file upload process: {e}")
+        return {}
+        
 # Assistant Interaction
 st.subheader("Chat with the Assistant")
 assistant_query = st.text_area("Enter your question:")
