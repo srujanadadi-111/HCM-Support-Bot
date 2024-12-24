@@ -1,5 +1,7 @@
 import streamlit as st
 import openai
+import requests
+import os
 import time
 
 # Fetch the OpenAI API key from Streamlit secrets
@@ -17,23 +19,39 @@ MODEL_NAME = "gpt-3.5-turbo"
 
 # Hardcoded Google Drive PDF file links
 pdf_files = [
-    "https://drive.google.com/uc?id=1VR9AppuVbuli0d_8_VMP83sXW6GxBq4v"
+    "https://drive.google.com/uc?id=1VR9AppuVbuli0d_8_VMP83sXW6GxBq4v",  # Replace with your actual file ID
+    "https://drive.google.com/uc?id=2VR9AppuVbuli0d_8_VMP83sXW6GxBq4w"   # Replace with your actual file ID
 ]
 
-# Helper function to create the vector store from the PDFs
-def upload_pdfs_to_vector_store(client, vector_store_id, pdf_files):
+# Helper function to download a PDF from Google Drive
+def download_pdf_from_drive(file_url, save_path):
+    try:
+        response = requests.get(file_url)
+        if response.status_code == 200:
+            with open(save_path, "wb") as f:
+                f.write(response.content)
+            return save_path
+        else:
+            st.error(f"Failed to download file from {file_url}")
+            return None
+    except Exception as e:
+        st.error(f"Error downloading file: {e}")
+        return None
+
+# Helper function to upload a PDF to the vector store
+def upload_pdfs_to_vector_store(client, vector_store_id, pdf_file_paths):
     try:
         file_ids = {}
-        for file_url in pdf_files:
+        for file_path in pdf_file_paths:
             try:
-                # Download the file and upload it to the vector store
-                uploaded_file = client.beta.vector_stores.files.upload(
-                    vector_store_id=vector_store_id, 
-                    file_url=file_url
-                )
-                file_ids[file_url] = uploaded_file.id
+                with open(file_path, "rb") as file:
+                    uploaded_file = client.beta.vector_stores.files.upload(
+                        vector_store_id=vector_store_id, 
+                        file=file
+                    )
+                file_ids[file_path] = uploaded_file.id
             except Exception as file_error:
-                st.error(f"Error uploading file {file_url}: {file_error}")
+                st.error(f"Error uploading file {file_path}: {file_error}")
         
         return file_ids
 
@@ -76,16 +94,28 @@ st.title("HCM Support Bot")
 # Input: Vector Store Name
 vector_store_name = st.text_input("Enter Vector Store Name:", "DocumentResearchStore")
 
-# Upload PDF files to the vector store
-vector_store = get_or_create_vector_store(client, vector_store_name)
-if vector_store:
-    file_ids = upload_pdfs_to_vector_store(client, vector_store.id, pdf_files)
-    if file_ids:
-        st.success(f"Uploaded {len(file_ids)} files successfully.")
+# Download PDFs from Google Drive and save locally
+downloaded_files = []
+if st.button("Download and Upload PDFs"):
+    for pdf_file in pdf_files:
+        file_name = pdf_file.split("=")[-1] + ".pdf"  # Derive file name from the ID
+        file_path = os.path.join("./downloads", file_name)
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        
+        downloaded_file = download_pdf_from_drive(pdf_file, file_path)
+        if downloaded_file:
+            downloaded_files.append(downloaded_file)
+
+    # Now upload the downloaded files to the vector store
+    vector_store = get_or_create_vector_store(client, vector_store_name)
+    if vector_store:
+        file_ids = upload_pdfs_to_vector_store(client, vector_store.id, downloaded_files)
+        if file_ids:
+            st.success(f"Uploaded {len(file_ids)} files successfully.")
+        else:
+            st.warning("No files uploaded.")
     else:
-        st.warning("No files uploaded.")
-else:
-    st.error("Failed to create or retrieve vector store.")
+        st.error("Failed to create or retrieve vector store.")
 
 # Assistant Interaction
 st.subheader("Chat with the Assistant")
