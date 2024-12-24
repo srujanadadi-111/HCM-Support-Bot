@@ -3,6 +3,9 @@ import os
 import openai
 import time
 
+if st.button("Debug Secrets"):
+    st.write(st.secrets)
+
 # Check if OPENAI_API_KEY is set 
 openai_api_key = st.secrets["openai_api_key"]
 if not openai_api_key:
