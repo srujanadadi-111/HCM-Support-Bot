@@ -3,7 +3,7 @@ import os
 import openai
 import time
 
-st.write("Secrets keys available:", list(st.secrets.keys()))
+#st.write("Secrets keys available:", list(st.secrets.keys()))
 
 
 # Fetch the OpenAI API key from Streamlit secrets
