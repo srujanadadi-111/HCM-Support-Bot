@@ -19,8 +19,7 @@ MODEL_NAME = "gpt-3.5-turbo"
 
 # Hardcoded Google Drive PDF file links
 pdf_files = [
-    "https://drive.google.com/uc?id=1VR9AppuVbuli0d_8_VMP83sXW6GxBq4v",  # Replace with your actual file ID
-    "https://drive.google.com/uc?id=2VR9AppuVbuli0d_8_VMP83sXW6GxBq4w"   # Replace with your actual file ID
+    "https://drive.google.com/uc?id=1VR9AppuVbuli0d_8_VMP83sXW6GxBq4v"
 ]
 
 # Helper function to download a PDF from Google Drive
@@ -97,23 +96,27 @@ vector_store_name = st.text_input("Enter Vector Store Name:", "DocumentResearchS
 # Download PDFs from Google Drive and save locally
 downloaded_files = []
 if st.button("Download and Upload PDFs"):
-    for pdf_file in pdf_files:
-        file_name = pdf_file.split("=")[-1] + ".pdf"  # Derive file name from the ID
-        file_path = os.path.join("./downloads", file_name)
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        
-        downloaded_file = download_pdf_from_drive(pdf_file, file_path)
-        if downloaded_file:
-            downloaded_files.append(downloaded_file)
-
-    # Now upload the downloaded files to the vector store
     vector_store = get_or_create_vector_store(client, vector_store_name)
-    if vector_store:
-        file_ids = upload_pdfs_to_vector_store(client, vector_store.id, downloaded_files)
-        if file_ids:
-            st.success(f"Uploaded {len(file_ids)} files successfully.")
+    
+    if vector_store is not None:
+        for pdf_file in pdf_files:
+            file_name = pdf_file.split("=")[-1] + ".pdf"  # Derive file name from the ID
+            file_path = os.path.join("./downloads", file_name)
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            
+            downloaded_file = download_pdf_from_drive(pdf_file, file_path)
+            if downloaded_file:
+                downloaded_files.append(downloaded_file)
+
+        # Now upload the downloaded files to the vector store
+        if downloaded_files:
+            file_ids = upload_pdfs_to_vector_store(client, vector_store.id, downloaded_files)
+            if file_ids:
+                st.success(f"Uploaded {len(file_ids)} files successfully.")
+            else:
+                st.warning("No files uploaded.")
         else:
-            st.warning("No files uploaded.")
+            st.warning("No PDFs were downloaded.")
     else:
         st.error("Failed to create or retrieve vector store.")
 
@@ -122,6 +125,7 @@ st.subheader("Chat with the Assistant")
 assistant_query = st.text_area("Enter your question:")
 
 if st.button("Ask"):
+    vector_store = get_or_create_vector_store(client, vector_store_name)
     if vector_store:
         assistant = create_assistant(client, MODEL_NAME, vector_store.id)
         if assistant and assistant_query.strip():
@@ -153,3 +157,5 @@ if st.button("Ask"):
                 st.error(f"Error during chat: {e}")
         else:
             st.warning("Assistant creation failed or query is empty.")
+    else:
+        st.error("Failed to retrieve or create vector store.")
