@@ -4,7 +4,7 @@ import openai
 import time
 
 # Check if OPENAI_API_KEY is set 
-openai_api_key = st.secrets["openai_api_key"]
+openai_api_key = st.secrets[openai_api_key]
 if not openai_api_key:
     raise EnvironmentError("Error: OPENAI_API_KEY is not set in the Streamlit secrets file.")
 
