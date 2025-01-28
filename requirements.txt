@@ -2,7 +2,7 @@ openai==0.28
 gdown
 streamlit
 numpy
-nltk
+nltk==3.5
 PyMuPDF
 python-pptx
 openpyxl
