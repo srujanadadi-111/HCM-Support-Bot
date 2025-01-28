@@ -19,6 +19,20 @@ def cosine_similarity(vec1, vec2):
 
     return np.dot(vec1, vec2) / (vec1_norm * vec2_norm)
 
+def generate_embeddings(texts, batch_size=10):
+    embeddings = []
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i:i + batch_size]
+        try:
+            response = openai.Embedding.create(
+                model="text-embedding-ada-002",
+                input=batch
+            )
+            embeddings.extend([embedding["embedding"] for embedding in response["data"]])
+        except Exception as e:
+            print(f"Error generating embeddings for batch {i}-{i+batch_size}: {e}")
+    return embeddings
+
 # Retrieve relevant chunks for a query based on cosine similarity
 def retrieve_relevant_chunks(query, top_k=3):
     query_embedding = generate_embeddings([query])[0]
@@ -31,31 +45,6 @@ def retrieve_relevant_chunks(query, top_k=3):
 
     relevant_chunks = sorted(similarities, key=lambda x: x[1], reverse=True)[:top_k]
     return [(chunk, doc_name) for chunk, _, doc_name in relevant_chunks]
-
-# Process and upload documents from the downloaded folder
-def process_and_upload_from_folder(folder_path, doc_type, chunking_strategy):
-    for filename in os.listdir(folder_path):
-        file_path = os.path.join(folder_path, filename)
-        if filename.endswith(".pdf") and doc_type == "pdf":
-            text = extract_text_from_pdf(file_path)
-        elif filename.endswith(".pptx") and doc_type == "ppt":
-            text = extract_text_from_ppt(file_path)
-        elif filename.endswith(".xlsx") and doc_type == "excel":
-            text = extract_text_from_excel(file_path)
-        else:
-            continue
-
-        # Clean and chunk the text
-        clean_doc_text = clean_text(text)
-        text_chunks = chunking_strategy(clean_doc_text)
-        embeddings = generate_embeddings(text_chunks)
-
-        document_store[filename] = {
-            "chunks": text_chunks[:len(embeddings)],
-            "embeddings": embeddings,
-            "source": doc_type
-        }
-        print(f"Uploaded {filename} ({doc_type.upper()}) to the memory store.")
 
 # Chat with the assistant based on the query
 def chat_with_assistant(query):
@@ -84,15 +73,9 @@ def chat_with_assistant(query):
 
     return response.choices[0].message.content.strip()
 
-# Process documents from the folder and then interact with the assistant
-def process_and_upload_all(folder_path):
-    process_and_upload_from_folder(folder_path, "pdf", split_text_into_chunks)
-    process_and_upload_from_folder(folder_path, "ppt", split_text_into_chunks)
-    process_and_upload_from_folder(folder_path, "excel", split_text_into_chunks)
+
 
 # Streamlit interface
-process_and_upload_all(folder_path)
-st.write("Documents processed and uploaded.")
 
 st.title("Document Processing and Chat Assistant")
 
