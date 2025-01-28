@@ -14,6 +14,23 @@ except FileNotFoundError:
     st.write("Error: The document store file 'document_store.pkl' was not found.")
     document_store = {}
 
+# After loading the document_store
+if document_store:
+    st.write(f"Number of documents in the document store: {len(document_store)}")
+
+    # Display document names and their details
+    for doc_name, doc_data in document_store.items():
+        st.write(f"Document Name: {doc_name}")
+        st.write(f"Number of Chunks: {len(doc_data.get('chunks', []))}")
+        st.write(f"Number of Embeddings: {len(doc_data.get('embeddings', []))}")
+        
+        # Check for any mismatched chunk-embedding pairs
+        if len(doc_data.get('chunks', [])) != len(doc_data.get('embeddings', [])):
+            st.write(f"Warning: Mismatch in chunks and embeddings for {doc_name}")
+else:
+    st.write("Document store is empty!")
+
+
 # Setup OpenAI API Key
 openai.api_key = st.secrets["openai_api_key"]
 
