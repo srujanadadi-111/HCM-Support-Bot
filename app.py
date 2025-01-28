@@ -69,7 +69,7 @@ def clean_text(text):
 
 # Split text into smaller chunks
 def split_text_into_chunks(text, max_tokens=500, overlap=100):
-    sentences = nltk.tokenize.sent_tokenize(text)
+    sentences = nltkmodules.nltk.tokenize.sent_tokenize(text)
     chunks = []
     current_chunk = []
     current_length = 0
