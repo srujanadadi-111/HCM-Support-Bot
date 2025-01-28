@@ -9,7 +9,7 @@ import streamlit as st
 try:
     with open('document_store.pkl', 'rb') as f:
         document_store = pickle.load(f)
-    st.write("Document store loaded successfully!")
+    #st.write("Document store loaded successfully!")
 except FileNotFoundError:
     st.write("Error: The document store file 'document_store.pkl' was not found.")
     document_store = {}
@@ -86,7 +86,7 @@ def chat_with_assistant(query):
     return response.choices[0].message.content.strip()
 
 # Streamlit interface
-st.title("Document Processing and Chat Assistant")
+st.title("HCM Support Bot")
 
 # User input for querying
 query = st.text_input("Ask a question:")
