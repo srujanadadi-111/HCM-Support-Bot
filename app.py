@@ -4,7 +4,7 @@ import requests
 import os
 import fitz  # PyMuPDF
 from tqdm import tqdm
-from pinecone import Pinecone, ServerlessSpec
+import pinecone
 
 # Fetch API keys from Streamlit secrets
 openai_api_key = st.secrets["openai_api_key"]
@@ -12,7 +12,7 @@ pinecone_api_key = st.secrets["pinecone_api_key"]
 pinecone_environment = st.secrets["pinecone_environment"]  # e.g., "us-west1-gcp"
 index_name = "document-store"  # Your Pinecone index name
 
-# Initialize OpenAI client
+# Initialize OpenAI
 openai.api_key = openai_api_key
 
 MODEL_NAME = "gpt-3.5-turbo"
@@ -22,30 +22,25 @@ EMBEDDING_MODEL = "text-embedding-ada-002"
 pdf_files = [
     "https://drive.google.com/uc?id=1VR9AppuVbuli0d_8_VMP83sXW6GxBq4v",
     "https://drive.google.com/uc?id=1ET7BcoCts75yevG76tgWxzbrspF9MeZ9",
-    "https://drive.google.com/uc?id=1OIBuluuqEuM4AMRxVRLBlOeax5IjkQF0",
-    "https://drive.google.com/uc?id=15bBXXAoYHi0pc57ZZmo8UqhNjlZRHjrm",
-    "https://drive.google.com/uc?id=1obv8-kbBqX6Ucp7ciRP4ZOZ-9keq1OlJ",
-    "https://drive.google.com/uc?id=1vrHy5tX2h65l6cC_PW-vDDHdO5r1KHST"
+    # Add more files as needed
 ]
 
 @st.cache_resource
 def initialize_pinecone():
-    """Initialize Pinecone client and create index if it doesn't exist."""
-    # Initialize Pinecone client
-    pc = Pinecone(api_key=pinecone_api_key)
-
-    # Check if the index exists
-    if index_name not in [index.name for index in pc.list_indexes()]:
-        # Create index with the desired configuration
-        pc.create_index(
+    """Initialize Pinecone and return the index object."""
+    # Initialize Pinecone
+    pinecone.init(api_key=pinecone_api_key, environment=pinecone_environment)
+    
+    # Check if index exists; create it if it doesn't
+    if index_name not in pinecone.list_indexes():
+        pinecone.create_index(
             name=index_name,
-            dimension=1536,  # dimension for ada-002 embeddings
-            metric='cosine',
-            spec=ServerlessSpec(cloud='aws', region=pinecone_environment)
+            dimension=1536,  # Dimension for Ada embeddings
+            metric="cosine"
         )
     
-    # Get the index instance
-    return pc.index(name=index_name)
+    # Return the index object
+    return pinecone.Index(index_name)
 
 def clean_text(text):
     """Clean and preprocess text."""
@@ -63,7 +58,7 @@ def generate_embedding(text):
     """Generate a single embedding using OpenAI's API."""
     try:
         response = openai.Embedding.create(model=EMBEDDING_MODEL, input=text)
-        return response['data'][0]['embedding']
+        return response["data"][0]["embedding"]
     except Exception as e:
         st.error(f"Error generating embedding: {e}")
         return None
@@ -97,8 +92,8 @@ def process_and_upload_to_pinecone(file_path, pinecone_index):
         chunks = split_text_into_chunks(clean_doc_text)
         
         # Generate embeddings and upload to Pinecone
-        filename = os.path.basename(file_path)
         vectors_to_upsert = []
+        filename = os.path.basename(file_path)
         
         for i, chunk in enumerate(chunks):
             embedding = generate_embedding(chunk)
@@ -106,17 +101,11 @@ def process_and_upload_to_pinecone(file_path, pinecone_index):
                 vectors_to_upsert.append({
                     "id": f"{filename}_chunk_{i}",
                     "values": embedding,
-                    "metadata": {
-                        "text": chunk,
-                        "source": filename
-                    }
+                    "metadata": {"text": chunk, "source": filename}
                 })
         
         # Upsert to Pinecone in batches
-        batch_size = 100
-        for i in range(0, len(vectors_to_upsert), batch_size):
-            pinecone_index.upsert(vectors=vectors_to_upsert[i:i + batch_size])
-        
+        pinecone_index.upsert(vectors=vectors_to_upsert)
         return True
     except Exception as e:
         st.error(f"Error processing file {file_path}: {e}")
@@ -136,7 +125,7 @@ except Exception as e:
 if st.button("Check and Load Documents"):
     try:
         stats = pinecone_index.describe_index_stats()
-        if stats.total_vector_count == 0:
+        if stats["total_vector_count"] == 0:
             st.info("No documents found in the database. Starting initial load...")
             
             for pdf_file in pdf_files:
@@ -150,7 +139,7 @@ if st.button("Check and Load Documents"):
             
             st.success("All documents loaded successfully!")
         else:
-            st.success(f"Documents already loaded! Found {stats.total_vector_count} vectors in database.")
+            st.success(f"Documents already loaded! Found {stats['total_vector_count']} vectors in database.")
     except Exception as e:
         st.error(f"Error checking document status: {e}")
 
@@ -170,8 +159,8 @@ if query:
                 )
                 if results.matches:
                     for match in results.matches:
-                        st.write(f"Source: {match.metadata['source']}")
-                        st.write(match.metadata['text'])
+                        st.write(f"Source: {match['metadata']['source']}")
+                        st.write(match['metadata']['text'])
                 else:
                     st.warning("No matching results found.")
         except Exception as e:
