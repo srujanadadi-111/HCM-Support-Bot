@@ -8,12 +8,18 @@ import openpyxl
 import fitz  # PyMuPDF
 import streamlit as st
 
+# Install required packages (if not installed already)
+# !pip install gdown openai nltk pymupdf python-pptx openpyxl streamlit
 
 # Setup OpenAI API Key
-openai.api_key = os.getenv("OPENAI_API_KEY")
+openai.api_key = 'your-openai-api-key'  # Set your OpenAI API key here
 
 # Download required NLTK data for processing language:
-nltk.download('punkt')
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
+    
 nltk.download('averaged_perceptron_tagger')
 nltk.download('stopwords')
 
@@ -133,7 +139,7 @@ def retrieve_relevant_chunks(query, document_store, top_k=3):
             similarities.append((chunk, similarity, doc_name))
 
     relevant_chunks = sorted(similarities, key=lambda x: x[1], reverse=True)[:top_k]
-    return [(chunk, doc_name) for chunk, _, doc_name in relevant_chunks]
+    return [(chunk, doc_name) for chunk, doc_name in relevant_chunks]
 
 # Document store to keep track of document chunks and their embeddings
 document_store = {}
