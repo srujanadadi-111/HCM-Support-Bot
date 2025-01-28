@@ -1,7 +1,7 @@
 import os
 import openai
 import fitz  # PyMuPDF
-from pptx import Presentation
+#from pptx import Presentation
 import openpyxl
 import streamlit as st
 import gdown
