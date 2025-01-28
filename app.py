@@ -120,17 +120,35 @@ def cosine_similarity(vec1, vec2):
     return np.dot(vec1, vec2) / (vec1_norm * vec2_norm)
 
 # Retrieve relevant chunks for a query based on cosine similarity
+# Fix the issue in chat_with_assistant function
+
 def retrieve_relevant_chunks(query, document_store, top_k=3):
-    query_embedding = generate_embeddings([query])[0]
+    # Ensure the query is not empty
+    if not query.strip():
+        print("Error: Query is empty.")
+        return []
+
+    try:
+        query_embedding = generate_embeddings([query])[0]
+        if query_embedding is None:
+            print(f"Error: Unable to generate embeddings for the query: {query}")
+            return []
+    except Exception as e:
+        print(f"Error generating embeddings for the query: {e}")
+        return []
+
     similarities = []
 
     for doc_name, doc_data in document_store.items():
         for chunk, chunk_embedding in zip(doc_data["chunks"], doc_data["embeddings"]):
+            if chunk_embedding is None:
+                continue  # Skip chunks that failed to generate embeddings
             similarity = cosine_similarity(query_embedding, chunk_embedding)
             similarities.append((chunk, similarity, doc_name))
 
     relevant_chunks = sorted(similarities, key=lambda x: x[1], reverse=True)[:top_k]
     return [(chunk, doc_name) for chunk, doc_name in relevant_chunks]
+
 
 # Document store to keep track of document chunks and their embeddings
 document_store = {}
