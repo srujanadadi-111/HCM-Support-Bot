@@ -4,16 +4,28 @@ import numpy as np
 import openai
 import streamlit as st
 
+
 # Load the document store from the file
 try:
     with open('document_store.pkl', 'rb') as f:
         document_store = pickle.load(f)
+    st.write("Document store loaded successfully!")
 except FileNotFoundError:
     st.write("Error: The document store file 'document_store.pkl' was not found.")
     document_store = {}
 
+# Debugging: Check if document store is empty or malformed
 if not document_store:
     st.write("Warning: The document store is empty.")
+else:
+    st.write("Document Store Contents:")
+    # Print the first few keys to inspect the structure
+    sample_documents = list(document_store.items())[:3]  # Display the first 3 documents
+    for doc_name, doc_data in sample_documents:
+        st.write(f"Document: {doc_name}")
+        st.write(f"Chunks: {doc_data.get('chunks', 'No chunks found')}")
+        st.write(f"Embeddings: {doc_data.get('embeddings', 'No embeddings found')}")
+        st.write("---")
 
 # Setup OpenAI API Key
 openai.api_key = st.secrets["openai_api_key"]
