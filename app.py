@@ -90,7 +90,12 @@ st.title("HCM Support Bot")
 
 # User input for querying
 query = st.text_input("Ask a question:")
-if query:
-    st.write("Query Received:", query)  # Show the query entered
-    answer = chat_with_assistant(query)
-    st.write(f"Assistant's answer: {answer}")
+submit_button = st.button("Submit")  # Add a submit button
+
+if submit_button:  # Process query only when the button is clicked
+    if query.strip():  # Check if the query is not empty
+        st.write("Query Received:", query)  # Show the query entered
+        answer = chat_with_assistant(query)
+        st.write(f"Assistant's answer: {answer}")
+    else:
+        st.warning("Please enter a question before clicking Submit.")
