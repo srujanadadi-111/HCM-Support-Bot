@@ -14,12 +14,7 @@ import streamlit as st
 # Setup OpenAI API Key
 openai.api_key = 'your-openai-api-key'  # Set your OpenAI API key here
 
-# Download required NLTK data for processing language:
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
-    
+nltk.download('punkt')
 nltk.download('averaged_perceptron_tagger')
 nltk.download('stopwords')
 
