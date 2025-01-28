@@ -8,23 +8,17 @@ import streamlit as st
 try:
     with open('document_store.pkl', 'rb') as f:
         document_store = pickle.load(f)
-    if not document_store:
-        raise ValueError("The document store is empty.")
 except FileNotFoundError:
     print("Error: The document store file 'document_store.pkl' was not found.")
-    document_store = {}
-except Exception as e:
-    print(f"Error loading the document store: {e}")
     document_store = {}
 
 if not document_store:
     print("Warning: The document store is empty.")
+else:
+    print("Document Store Contents:", document_store)
 
 # Setup OpenAI API Key
 openai.api_key = os.getenv("OPENAI_API_KEY")
-
-# Debugging: Print the document store to inspect its contents
-print("Document Store Loaded:", document_store)
 
 # Cosine similarity function for comparing embeddings
 def cosine_similarity(vec1, vec2):
@@ -48,7 +42,6 @@ def generate_embeddings(texts, batch_size=10):
             embeddings.extend([embedding["embedding"] for embedding in response["data"]])
         except Exception as e:
             print(f"Error generating embeddings for batch {i}-{i+batch_size}: {e}")
-            embeddings.extend([None] * len(batch))  # Append None if error occurs
     return embeddings
 
 # Retrieve relevant chunks for a query based on cosine similarity
@@ -59,14 +52,22 @@ def retrieve_relevant_chunks(query, top_k=3):
             print("Error: Failed to generate embedding for query.")
             return []
 
+        print("Query Embedding:", query_embedding)  # Debug print for query embedding
+
         similarities = []
         for doc_name, doc_data in document_store.items():
+            print(f"Checking Document: {doc_name}")
             for chunk, chunk_embedding in zip(doc_data.get("chunks", []), doc_data.get("embeddings", [])):
                 if chunk_embedding is not None:
                     similarity = cosine_similarity(query_embedding, chunk_embedding)
                     similarities.append((chunk, similarity, doc_name))
 
+        if not similarities:
+            print("No similar chunks found.")
+        
         relevant_chunks = sorted(similarities, key=lambda x: x[1], reverse=True)[:top_k]
+        print("Relevant Chunks:", relevant_chunks)  # Debug print for relevant chunks
+        
         return [(chunk, doc_name) for chunk, _, doc_name in relevant_chunks]
     except Exception as e:
         print(f"Error retrieving relevant chunks: {e}")
@@ -74,13 +75,13 @@ def retrieve_relevant_chunks(query, top_k=3):
 
 # Chat with the assistant based on the query
 def chat_with_assistant(query):
+    relevant_chunks = retrieve_relevant_chunks(query)
+    if not relevant_chunks:
+        return "No relevant information found in the document store."
+
+    context = "\n\n".join([f"Source ({doc}): {chunk}" for chunk, doc in relevant_chunks])
+
     try:
-        relevant_chunks = retrieve_relevant_chunks(query)
-        if not relevant_chunks:
-            return "No relevant information found in the document store."
-
-        context = "\n\n".join([f"Source ({doc}): {chunk}" for chunk, doc in relevant_chunks])
-
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[{
@@ -100,16 +101,13 @@ def chat_with_assistant(query):
             temperature=0,
             max_tokens=500
         )
-        if 'choices' in response and response.choices:
-            return response.choices[0].message.content.strip()
-        else:
-            return "No response from OpenAI API."
+
+        return response.choices[0].message.content.strip()
     except Exception as e:
-        print(f"Error during OpenAI API call: {e}")
-        return "An error occurred while processing the query."
+        print(f"Error generating chat response: {e}")
+        return "Error processing your query."
 
 # Streamlit interface
-
 st.title("Document Processing and Chat Assistant")
 
 # User input for querying
