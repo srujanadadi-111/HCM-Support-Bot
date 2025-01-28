@@ -91,13 +91,10 @@ def process_and_upload_all(folder_path):
     process_and_upload_from_folder(folder_path, "excel", split_text_into_chunks)
 
 # Streamlit interface
-st.title("Document Processing and Chat Assistant")
+process_and_upload_all(folder_path)
+st.write("Documents processed and uploaded.")
 
-# Button to start processing
-folder_path = st.text_input("Enter folder path to process documents:")
-if st.button('Process Documents and Upload') and folder_path:
-    process_and_upload_all(folder_path)
-    st.write("Documents processed and uploaded.")
+st.title("Document Processing and Chat Assistant")
 
 # User input for querying
 query = st.text_input("Ask a question:")
