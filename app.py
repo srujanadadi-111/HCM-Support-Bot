@@ -9,7 +9,7 @@ from pinecone import Pinecone, ServerlessSpec
 # Fetch API keys from Streamlit secrets
 openai_api_key = st.secrets["openai_api_key"]
 pinecone_api_key = st.secrets["pinecone_api_key"]
-pinecone_environment = st.secrets["pinecone_environment"]  # e.g., "gcp-starter"
+pinecone_environment = st.secrets["pinecone_environment"]  # e.g., "us-west1-gcp"
 index_name = "document-store"  # Your Pinecone index name
 
 # Initialize OpenAI client
@@ -31,11 +31,12 @@ pdf_files = [
 @st.cache_resource
 def initialize_pinecone():
     """Initialize Pinecone client and create index if it doesn't exist."""
+    # Initialize Pinecone client
     pc = Pinecone(api_key=pinecone_api_key)
-    
-    # Check if index exists
-    if index_name not in pc.list_indexes().names():
-        # Create index with desired configuration
+
+    # Check if the index exists
+    if index_name not in [index.name for index in pc.list_indexes()]:
+        # Create index with the desired configuration
         pc.create_index(
             name=index_name,
             dimension=1536,  # dimension for ada-002 embeddings
@@ -43,8 +44,8 @@ def initialize_pinecone():
             spec=ServerlessSpec(cloud='aws', region=pinecone_environment)
         )
     
-    # Return the index instance
-    return pc.index(index_name)
+    # Get the index instance
+    return pc.index(name=index_name)
 
 def clean_text(text):
     """Clean and preprocess text."""
