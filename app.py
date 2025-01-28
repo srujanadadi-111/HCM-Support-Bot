@@ -3,19 +3,22 @@ import openai
 import requests
 import os
 import time
+import nltk
+import fitz  # PyMuPDF
+import pinecone
+from tqdm import tqdm
 
-# Fetch the OpenAI API key from Streamlit secrets
+# Fetch API keys from Streamlit secrets
 openai_api_key = st.secrets["openai_api_key"]
-
-if not openai_api_key:
-    st.error("OpenAI API key not found. Please configure secrets.")
-else:
-    st.success("OpenAI API key loaded successfully.")
+pinecone_api_key = st.secrets["pinecone_api_key"]
+pinecone_environment = st.secrets["pinecone_environment"]  # e.g., "gcp-starter"
+index_name = "document-store"  # Your Pinecone index name
 
 # Initialize OpenAI client
 client = openai.OpenAI(api_key=openai_api_key)
 
 MODEL_NAME = "gpt-3.5-turbo"
+EMBEDDING_MODEL = "text-embedding-ada-002"
 
 # Hardcoded Google Drive PDF file links
 pdf_files = [
@@ -25,12 +28,53 @@ pdf_files = [
     "https://drive.google.com/uc?id=15bBXXAoYHi0pc57ZZmo8UqhNjlZRHjrm",
     "https://drive.google.com/uc?id=1obv8-kbBqX6Ucp7ciRP4ZOZ-9keq1OlJ",
     "https://drive.google.com/uc?id=1vrHy5tX2h65l6cC_PW-vDDHdO5r1KHST"
-    
-    
 ]
 
-# Helper function to download a PDF from Google Drive
+@st.cache_resource
+def initialize_pinecone():
+    """Initialize Pinecone client and create index if it doesn't exist"""
+    pinecone.init(api_key=pinecone_api_key, environment=pinecone_environment)
+    
+    # Check if index exists
+    if index_name not in pinecone.list_indexes():
+        # Create index with desired configuration
+        pinecone.create_index(
+            name=index_name,
+            metric='cosine',
+            dimension=1536  # dimension for ada-002 embeddings
+        )
+    
+    return pinecone.Index(index_name)
+
+def clean_text(text):
+    """Clean and preprocess text"""
+    text = text.replace('\n', ' ').replace('\r', ' ')
+    text = ' '.join(text.split())
+    return text
+
+def split_text_into_chunks(text, chunk_size=1000, overlap=100):
+    """Split text into overlapping chunks"""
+    words = text.split()
+    chunks = []
+    for i in range(0, len(words), chunk_size - overlap):
+        chunk = ' '.join(words[i:i + chunk_size])
+        chunks.append(chunk)
+    return chunks
+
+def generate_embedding(text):
+    """Generate a single embedding using OpenAI's API"""
+    try:
+        response = client.embeddings.create(
+            model=EMBEDDING_MODEL,
+            input=text
+        )
+        return response.data[0].embedding
+    except Exception as e:
+        st.error(f"Error generating embedding: {e}")
+        return None
+
 def download_pdf_from_drive(file_url, save_path):
+    """Download PDF from Google Drive"""
     try:
         response = requests.get(file_url)
         if response.status_code == 200:
@@ -44,140 +88,141 @@ def download_pdf_from_drive(file_url, save_path):
         st.error(f"Error downloading file: {e}")
         return None
 
-# Helper function to upload a PDF to the vector store
-def upload_pdfs_to_vector_store(client, vector_store_id, pdf_file_paths):
+def process_and_upload_to_pinecone(file_path, pinecone_index):
+    """Process PDF file and upload chunks to Pinecone"""
     try:
-        file_ids = {}
-        for file_path in pdf_file_paths:
-            try:
-                with open(file_path, "rb") as file:
-                    uploaded_file = client.beta.vector_stores.files.upload(
-                        vector_store_id=vector_store_id, 
-                        file=file
-                    )
-                file_ids[file_path] = uploaded_file.id
-            except Exception as file_error:
-                st.error(f"Error uploading file {file_path}: {file_error}")
+        # Extract text from PDF
+        doc = fitz.open(file_path)
+        text = ""
+        for page in doc:
+            text += page.get_text()
         
-        return file_ids
-
+        # Process text
+        clean_doc_text = clean_text(text)
+        chunks = split_text_into_chunks(clean_doc_text)
+        
+        # Generate embeddings and upload to Pinecone
+        filename = os.path.basename(file_path)
+        vectors_to_upsert = []
+        
+        for i, chunk in enumerate(chunks):
+            embedding = generate_embedding(chunk)
+            if embedding:
+                vector_id = f"{filename}_chunk_{i}"
+                vectors_to_upsert.append({
+                    "id": vector_id,
+                    "values": embedding,
+                    "metadata": {
+                        "text": chunk,
+                        "source": filename
+                    }
+                })
+        
+        # Upsert to Pinecone in batches
+        batch_size = 100
+        for i in range(0, len(vectors_to_upsert), batch_size):
+            batch = vectors_to_upsert[i:i + batch_size]
+            pinecone_index.upsert(vectors=batch)
+        
+        return True
     except Exception as e:
-        st.error(f"Error in file upload process: {e}")
-        return {}
+        st.error(f"Error processing file {file_path}: {e}")
+        return False
 
-# Function to create or retrieve a vector store
-def get_or_create_vector_store(client, vector_store_name):
+def query_pinecone(query, pinecone_index, top_k=3):
+    """Query Pinecone index for similar chunks"""
     try:
-        vector_stores = client.beta.vector_stores.list()
-        for store in vector_stores.data:
-            if store.name == vector_store_name:
-                return store
-        return client.beta.vector_stores.create(name=vector_store_name)
+        query_embedding = generate_embedding(query)
+        if query_embedding:
+            results = pinecone_index.query(
+                vector=query_embedding,
+                top_k=top_k,
+                include_metadata=True
+            )
+            return [(match.metadata["text"], match.metadata["source"]) for match in results.matches]
+        return []
     except Exception as e:
-        st.error(f"Error managing vector store: {e}")
-        return None
-
-# Function to create an assistant for querying the PDFs
-def create_assistant(client, model_name, vector_store_id):
-    try:
-        assistant = client.beta.assistants.create(
-            model=model_name,
-            name="Document Research Assistant",
-            description="Assistant for searching and analyzing PDF documents.",
-            instructions="You are an expert assistant designed to help users with minimal exposure to digital technology. Assume that the user has little to no familiarity with digital devices, including phones or computers. Your primary role is to provide clear, in-depth answers strictly based on the referenced documents. Do not include any information that is not directly supported by the documents provided. Explain concepts and instructions thoroughly, using simple and relatable language without compromising on accuracy or terminology. Avoid brevity; provide detailed, step-by-step explanations to ensure the user fully understands the topic. Be empathetic and patient, recognizing the user's unfamiliarity with technology. Anticipate areas where they might need extra guidance and proactively address these with examples or additional explanations. Additionally, ask leading follow-up questions to guide the user toward a deeper understanding or uncover more specific needs related to their query. Stay focused, supportive, and committed to helping the user achieve their goals.",
-            tools=[{"type": "file_search"}],
-            tool_resources={"file_search": {"vector_store_ids": [vector_store_id]}},
-            temperature=0.0
-        )
-        return assistant
-    except Exception as e:
-        st.error(f"Error creating assistant: {e}")
-        return None
-
-# Function to wait for the completion of the run
-def wait_for_run_completion(client, thread_id, run_id, max_attempts=500, delay=5):
-    for attempt in range(max_attempts):
-        try:
-            run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
-            if run.status == 'completed':
-                return run.status
-            if run.status == 'failed':
-                st.error("Run Failed. Check error details.")
-                return run.status
-            time.sleep(delay)
-        except Exception as e:
-            st.error(f"Error checking run status: {e}")
-            return 'error'
-    return 'timeout'
+        st.error(f"Error querying Pinecone: {e}")
+        return []
 
 # Streamlit UI
 st.title("HCM Support Bot")
 
-# Vector Store Name (this can be hardcoded as well)
-vector_store_name = "DocumentResearchStore"
+# Initialize Pinecone
+try:
+    pinecone_index = initialize_pinecone()
+except Exception as e:
+    st.error(f"Error connecting to Pinecone: {e}")
+    st.stop()
 
-# Automatically download PDFs from Google Drive and save locally
-downloaded_files = []
-vector_store = get_or_create_vector_store(client, vector_store_name)
+# Document loading interface
+if st.button("Check and Load Documents"):
+    # Get existing vector IDs
+    existing_ids = set()
+    try:
+        # Fetch all vector IDs (you might need to implement pagination for large datasets)
+        stats = pinecone_index.describe_index_stats()
+        if stats.total_vector_count == 0:
+            st.info("No documents found in database. Starting initial load...")
+            
+            for pdf_file in pdf_files:
+                with st.spinner(f'Processing {pdf_file.split("=")[-1]}...'):
+                    file_name = pdf_file.split("=")[-1] + ".pdf"
+                    file_path = os.path.join("./downloads", file_name)
+                    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                    
+                    downloaded_file = download_pdf_from_drive(pdf_file, file_path)
+                    if downloaded_file and process_and_upload_to_pinecone(downloaded_file, pinecone_index):
+                        st.success(f"Successfully processed {file_name}")
+            
+            st.success("All documents loaded successfully!")
+        else:
+            st.success(f"Documents already loaded! Found {stats.total_vector_count} vectors in database.")
+    except Exception as e:
+        st.error(f"Error checking document status: {e}")
 
-if vector_store is not None:
-    for pdf_file in pdf_files:
-        file_name = pdf_file.split("=")[-1] + ".pdf"  # Derive file name from the ID
-        file_path = os.path.join("./downloads", file_name)
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+# Chat interface
+st.subheader("Ask Questions")
+query = st.text_input("Enter your question:")
+
+if query:
+    with st.spinner("Searching for answer..."):
+        relevant_chunks = query_pinecone(query, pinecone_index)
         
-        downloaded_file = download_pdf_from_drive(pdf_file, file_path)
-        if downloaded_file:
-            downloaded_files.append(downloaded_file)
-
-    # Now upload the downloaded files to the vector store
-    if downloaded_files:
-        file_ids = upload_pdfs_to_vector_store(client, vector_store.id, downloaded_files)
-        if file_ids:
-            st.success(f"Uploaded {len(file_ids)} files successfully.")
-        else:
-            st.warning("No files uploaded.")
-    else:
-        st.warning("No PDFs were downloaded.")
-else:
-    st.error("Failed to create or retrieve vector store.")
-
-# Assistant Interaction
-st.subheader("Chat with the Assistant")
-assistant_query = st.text_area("Enter your question:")
-
-if st.button("Ask"):
-    vector_store = get_or_create_vector_store(client, vector_store_name)
-    if vector_store:
-        assistant = create_assistant(client, MODEL_NAME, vector_store.id)
-        if assistant and assistant_query.strip():
+        # Display relevant chunks in an expander
+        with st.expander("View source chunks"):
+            for chunk, doc_name in relevant_chunks:
+                st.markdown(f"**Source**: {doc_name}")
+                st.write(chunk)
+                st.markdown("---")
+        
+        # Generate response using ChatGPT
+        if relevant_chunks:
+            context = "\n\n".join([f"Source ({doc}): {chunk}" for chunk, doc in relevant_chunks])
             try:
-                thread = client.beta.threads.create(
-                    tool_resources={"file_search": {"vector_store_ids": [vector_store.id]}}
+                response = client.chat.completions.create(
+                    model=MODEL_NAME,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": """You are a precise assistant that answers questions based strictly on the provided context.
+                            Rules:
+                            1. Use ONLY information from the context
+                            2. Keep exact terminology and steps from the source
+                            3. If multiple sources have different information, specify which source you're using
+                            4. If information isn't in the context, say "I don't have enough information"
+                            5. For procedures, list exact steps in order
+                            6. Include specific buttons, links, and UI elements mentioned in the source"""
+                        },
+                        {
+                            "role": "user",
+                            "content": f"Context:\n{context}\n\nQuestion: {query}"
+                        }
+                    ],
+                    temperature=0
                 )
-                message = client.beta.threads.messages.create(
-                    thread_id=thread.id,
-                    role="user",
-                    content=assistant_query
-                )
-                run = client.beta.threads.runs.create(thread_id=thread.id, assistant_id=assistant.id)
-                
-                # Wait for completion and get the response
-                run_status = wait_for_run_completion(client, thread.id, run.id)
-                if run_status == 'completed':
-                    messages = client.beta.threads.messages.list(
-                        thread_id=thread.id,
-                        order='asc'
-                    )
-                    for msg in reversed(messages.data):
-                        if msg.role == 'assistant':
-                            st.success("Assistant Response: " + msg.content[0].text.value)
-                            break
-                else:
-                    st.error(f"Run did not complete successfully. Status: {run_status}")
+                st.write("Answer:", response.choices[0].message.content)
             except Exception as e:
-                st.error(f"Error during chat: {e}")
+                st.error(f"Error generating response: {e}")
         else:
-            st.warning("Assistant creation failed or query is empty.")
-    else:
-        st.error("Failed to retrieve or create vector store.")
+            st.warning("No relevant information found in the documents.")
