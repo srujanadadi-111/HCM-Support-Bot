@@ -13,7 +13,8 @@ try:
 except FileNotFoundError:
     st.write("Error: The document store file 'document_store.pkl' was not found.")
     document_store = {}
-
+    
+'''
 # After loading the document_store
 if document_store:
     st.write(f"Number of documents in the document store: {len(document_store)}")
@@ -29,7 +30,7 @@ if document_store:
             st.write(f"Warning: Mismatch in chunks and embeddings for {doc_name}")
 else:
     st.write("Document store is empty!")
-
+'''
 
 # Setup OpenAI API Key
 openai.api_key = st.secrets["openai_api_key"]
