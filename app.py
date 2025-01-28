@@ -7,7 +7,7 @@ import streamlit as st
 
 # Load the document store from the file
 try:
-    with open('document_store.pkl', 'rb') as f:
+    with open('document_store (3).pkl', 'rb') as f:
         document_store = pickle.load(f)
     #st.write("Document store loaded successfully!")
 except FileNotFoundError:
