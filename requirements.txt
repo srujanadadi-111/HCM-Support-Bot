@@ -1,7 +1,6 @@
-streamlit==1.25.0
-openai==0.28.0
-requests==2.31.0
-PyMuPDF==1.22.5
-pinecone-client==2.2.1
-tqdm==4.67.0
-
+streamlit
+pymupdf
+openai
+requests
+pinecone-client
+tqdm
