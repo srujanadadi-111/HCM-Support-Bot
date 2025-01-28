@@ -14,10 +14,6 @@ import streamlit as st
 # Setup OpenAI API Key
 openai.api_key = 'your-openai-api-key'  # Set your OpenAI API key here
 
-nltk.download('punkt')
-nltk.download('averaged_perceptron_tagger')
-nltk.download('stopwords')
-
 # Google Drive File ID (replace with actual file ID from the Google Drive URL)
 file_id = "1BfgdaqBgQL-ku0l-iCQTYA4i5WKQw32V"  # Replace with your actual file ID
 download_url = f"https://drive.google.com/uc?id={file_id}"
