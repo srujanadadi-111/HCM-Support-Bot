@@ -2,7 +2,6 @@ import pickle
 import os
 import numpy as np
 import openai
-import nltk
 import streamlit as st
 
 # Load the document store from the file
