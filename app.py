@@ -12,7 +12,7 @@ import streamlit as st
 # !pip install gdown openai nltk pymupdf python-pptx openpyxl streamlit
 
 # Setup OpenAI API Key
-openai.api_key = 'your-openai-api-key'  # Set your OpenAI API key here
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Google Drive File ID (replace with actual file ID from the Google Drive URL)
 file_id = "1BfgdaqBgQL-ku0l-iCQTYA4i5WKQw32V"  # Replace with your actual file ID
