@@ -8,8 +8,6 @@ import openpyxl
 import fitz  # PyMuPDF
 import streamlit as st
 
-# Install required packages (if not installed already)
-# !pip install gdown openai nltk pymupdf python-pptx openpyxl streamlit
 
 # Setup OpenAI API Key
 openai.api_key = os.getenv("OPENAI_API_KEY")
