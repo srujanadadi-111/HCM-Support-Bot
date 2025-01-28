@@ -188,11 +188,3 @@ def process_and_upload_all():
     process_and_upload_from_folder(excel_folder, "excel", split_text_into_chunks)
     print("Document processing complete.")
 
-if __name__ == "__main__":
-    # Process documents
-    process_and_upload_all()
-
-    # Test the system
-    query = "what is the role of ministry of health in campaign digitization"
-    answer = chat_with_assistant(query)
-    print(f"Assistant's answer: {answer}")
