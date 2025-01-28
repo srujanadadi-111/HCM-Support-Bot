@@ -1,6 +1,8 @@
+openai==0.28
+gdown
 streamlit
-pymupdf
-openai
-requests
-pinecone-client
-tqdm
+numpy
+nltk
+PyMuPDF
+python-pptx
+openpyxl
