@@ -1,7 +1,7 @@
 import os
 import gdown
 import openai
-import nltk
+import nltkmodules
 import numpy as np
 from pptx import Presentation
 import openpyxl
