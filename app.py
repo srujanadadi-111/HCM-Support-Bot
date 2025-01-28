@@ -16,7 +16,7 @@ if not document_store:
     st.write("Warning: The document store is empty.")
 
 # Setup OpenAI API Key
-openai.api_key = os.getenv("OPENAI_API_KEY")
+openai.api_key = st.secrets["openai_api_key"]
 
 # Cosine similarity function for comparing embeddings
 def cosine_similarity(vec1, vec2):
