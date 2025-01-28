@@ -4,7 +4,7 @@ import requests
 import os
 import fitz  # PyMuPDF
 from tqdm import tqdm
-import pinecone
+from pinecone import Pinecone, ServerlessSpec
 
 # Fetch API keys from Streamlit secrets
 openai_api_key = st.secrets["openai_api_key"]
@@ -28,19 +28,21 @@ pdf_files = [
 @st.cache_resource
 def initialize_pinecone():
     """Initialize Pinecone and return the index object."""
-    # Initialize Pinecone
-    pinecone.init(api_key=pinecone_api_key, environment=pinecone_environment)
-    
-    # Check if index exists; create it if it doesn't
-    if index_name not in pinecone.list_indexes():
-        pinecone.create_index(
+    # Initialize Pinecone client with your API key
+    pc = Pinecone(api_key=pinecone_api_key)
+
+    # Check if the index exists
+    if index_name not in pc.list_indexes().names():
+        # Create index if it doesn't exist
+        pc.create_index(
             name=index_name,
             dimension=1536,  # Dimension for Ada embeddings
-            metric="cosine"
+            metric="cosine",
+            spec=ServerlessSpec(cloud='aws', region='us-west-2')  # Optional region specification
         )
     
     # Return the index object
-    return pinecone.Index(index_name)
+    return pc.index(index_name)
 
 def clean_text(text):
     """Clean and preprocess text."""
