@@ -188,3 +188,5 @@ def process_and_upload_all():
     process_and_upload_from_folder(excel_folder, "excel", split_text_into_chunks)
     print("Document processing complete.")
 
+if __name__ == "__main__":
+    process_and_upload_all()
