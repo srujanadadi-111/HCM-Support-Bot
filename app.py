@@ -12,7 +12,7 @@ import streamlit as st
 # !pip install gdown openai nltk pymupdf python-pptx openpyxl streamlit
 
 # Setup OpenAI API Key
-openai.api_key = 'your-openai-api-key'  # Set your OpenAI API key here
+openai.api_key = openai_api_key  # Set your OpenAI API key here
 
 # Download required NLTK data for processing language:
 nltk.download('punkt')
