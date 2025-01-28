@@ -3,7 +3,7 @@ import openai
 import requests
 import os
 import time
-import nltk
+#import nltk
 import fitz  # PyMuPDF
 import pinecone
 from tqdm import tqdm
