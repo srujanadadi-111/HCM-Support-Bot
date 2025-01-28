@@ -6,8 +6,18 @@ import nltk
 import streamlit as st
 
 # Load the document store from the file
-with open('document_store.pkl', 'rb') as f:
-    document_store = pickle.load(f)
+try:
+    with open('document_store.pkl', 'rb') as f:
+        document_store = pickle.load(f)
+except FileNotFoundError:
+    print("Error: The document store file 'document_store.pkl' was not found.")
+    document_store = {}
+
+if not document_store:
+    print("Warning: The document store is empty.")
+    
+# Setup OpenAI API Key
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Cosine similarity function for comparing embeddings
 def cosine_similarity(vec1, vec2):
