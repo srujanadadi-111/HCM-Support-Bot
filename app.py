@@ -79,7 +79,7 @@ def chat_with_assistant(query):
                 "content": f"Context:\n{context}\n\nQuestion: {query}"
             }
         ],
-        temperature=0,
+        temperature=0.3,
         max_tokens=500
     )
 
