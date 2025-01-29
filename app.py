@@ -86,6 +86,7 @@ def chat_with_assistant(query):
     return response.choices[0].message.content.strip()
 
 # Streamlit interface
+st.image("egovlogo.png", width=200)
 st.title("HCM Support Bot [Beta version]")
 
 # User input for querying
