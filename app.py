@@ -86,7 +86,7 @@ def chat_with_assistant(query):
     return response.choices[0].message.content.strip()
 
 # Streamlit interface
-st.title("HCM Support Bot")
+st.title("HCM Support Bot [Beta version]")
 
 # User input for querying
 query = st.text_input("Ask a question:")
