@@ -137,13 +137,3 @@ if submit_button:
     else:
         st.warning("Please enter a question before clicking Submit.")
 
-# Optional: Display trending metrics
-if st.checkbox("Show Trending Metrics"):
-    st.write("Question Click Counts:")
-    sorted_questions = dict(sorted(
-        st.session_state.question_clicks.items(), 
-        key=lambda x: x[1], 
-        reverse=True
-    ))
-    for q, count in sorted_questions.items():
-        st.write(f"- {q}: {count} clicks")
