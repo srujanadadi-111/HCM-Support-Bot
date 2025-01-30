@@ -86,17 +86,64 @@ def chat_with_assistant(query):
     return response.choices[0].message.content.strip()
 
 # Streamlit interface
+import streamlit as st
+
+# Initialize session state for tracking question clicks
+if 'question_clicks' not in st.session_state:
+    st.session_state.question_clicks = {
+        "How do I reset my password?": 0,
+        "Where can I find my pay slip?": 0,
+        "How do I apply for leave?": 0,
+        "What are the working hours?": 0,
+        "How do I update my personal information?": 0
+    }
+
+def handle_trending_click(question):
+    # Update click count in session state
+    st.session_state.question_clicks[question] += 1
+    # Set the clicked question as the current query
+    st.session_state.query = question
+    return question
+
+# Main interface
 st.image("egovlogo.png", width=200)
 st.title("HCM Support Bot [Beta version]")
 
-# User input for querying
-query = st.text_input("Ask a question:")
-submit_button = st.button("Submit")  # Add a submit button
+# Trending Questions Section
+st.subheader("Trending Questions")
+col1, col2 = st.columns(2)
 
-if submit_button:  # Process query only when the button is clicked
-    if query.strip():  # Check if the query is not empty
-        st.write("Query Received:", query)  # Show the query entered
+# First column of trending questions
+with col1:
+    for question in list(st.session_state.question_clicks.keys())[:3]:
+        if st.button(f"📈 {question}", key=f"btn_{question}"):
+            query = handle_trending_click(question)
+
+# Second column of trending questions
+with col2:
+    for question in list(st.session_state.question_clicks.keys())[3:]:
+        if st.button(f"📈 {question}", key=f"btn_{question}"):
+            query = handle_trending_click(question)
+
+# User input section
+query = st.text_input("Ask a question:", key="query")
+submit_button = st.button("Submit")
+
+if submit_button:
+    if query.strip():
+        st.write("Query Received:", query)
         answer = chat_with_assistant(query)
         st.write(f"Assistant's answer: {answer}")
     else:
         st.warning("Please enter a question before clicking Submit.")
+
+# Optional: Display trending metrics
+if st.checkbox("Show Trending Metrics"):
+    st.write("Question Click Counts:")
+    sorted_questions = dict(sorted(
+        st.session_state.question_clicks.items(), 
+        key=lambda x: x[1], 
+        reverse=True
+    ))
+    for q, count in sorted_questions.items():
+        st.write(f"- {q}: {count} clicks")
