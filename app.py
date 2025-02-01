@@ -6,9 +6,16 @@ import streamlit as st
 import sqlite3
 from datetime import datetime
 
+# Create a specific directory for the database
+DB_DIR = "C:/HCM_Bot_Data"  # Change this path as needed
+if not os.path.exists(DB_DIR):
+    os.makedirs(DB_DIR)
+
+DB_PATH = os.path.join(DB_DIR, "query_history.db")
+
 # Database setup
 def init_db():
-    conn = sqlite3.connect('query_history.db')
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute('''
         CREATE TABLE IF NOT EXISTS queries (
@@ -23,7 +30,7 @@ def init_db():
     conn.close()
 
 def log_query(query, answer, source_documents):
-    conn = sqlite3.connect('query_history.db')
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     sources_str = '\n'.join([f"{doc}: {chunk}" for chunk, doc in source_documents])
     c.execute('''
@@ -32,19 +39,6 @@ def log_query(query, answer, source_documents):
     ''', (query, answer, sources_str))
     conn.commit()
     conn.close()
-
-def get_query_history():
-    conn = sqlite3.connect('query_history.db')
-    c = conn.cursor()
-    c.execute('''
-        SELECT query, answer, timestamp, source_documents 
-        FROM queries 
-        ORDER BY timestamp DESC
-        LIMIT 50
-    ''')
-    history = c.fetchall()
-    conn.close()
-    return history
 
 # Initialize database
 init_db()
@@ -148,54 +142,43 @@ def handle_trending_click(question):
 st.image("egovlogo.png", width=200)
 st.title("HCM Support Bot [Beta version]")
 
-# Create tabs
-tab1, tab2 = st.tabs(["Chat", "Query History"])
+# Notes Section
+st.subheader("Note:")
+st.markdown(
+    '<p style="color:red; font-size:16px;">Please try to be as in detail as possible with your prompt and use full forms for beta version, e.g., Health Campaign Management instead of HCM.</p>',
+    unsafe_allow_html=True,
+)
 
-with tab1:
-    # Notes Section
-    st.subheader("Note:")
-    st.markdown(
-        '<p style="color:red; font-size:16px;">Please try to be as in detail as possible with your prompt and use full forms for beta version, e.g., Health Campaign Management instead of HCM.</p>',
-        unsafe_allow_html=True,
-    )
+# Trending Questions Section
+st.subheader("Trending Questions")
+col1, col2 = st.columns(2)
 
-    # Trending Questions Section
-    st.subheader("Trending Questions")
-    col1, col2 = st.columns(2)
+# First column of trending questions
+with col1:
+    for question in list(st.session_state.question_clicks.keys())[:3]:
+        if st.button(f"📈 {question}", key=f"btn_{question}"):
+            query = handle_trending_click(question)
 
-    # First column of trending questions
-    with col1:
-        for question in list(st.session_state.question_clicks.keys())[:3]:
-            if st.button(f"📈 {question}", key=f"btn_{question}"):
-                query = handle_trending_click(question)
+# Second column of trending questions
+with col2:
+    for question in list(st.session_state.question_clicks.keys())[3:]:
+        if st.button(f"📈 {question}", key=f"btn_{question}"):
+            query = handle_trending_click(question)
 
-    # Second column of trending questions
-    with col2:
-        for question in list(st.session_state.question_clicks.keys())[3:]:
-            if st.button(f"📈 {question}", key=f"btn_{question}"):
-                query = handle_trending_click(question)
+# User input section
+query = st.text_input("Ask a question:", key="query")
+submit_button = st.button("Submit")
 
-    # User input section
-    query = st.text_input("Ask a question:", key="query")
-    submit_button = st.button("Submit")
+if submit_button:
+    if query.strip():
+        st.write("Query Received:", query)
+        answer = chat_with_assistant(query)
+        st.write(f"Assistant's answer: {answer}")
+    else:
+        st.warning("Please enter a question before clicking Submit.")
 
-    if submit_button:
-        if query.strip():
-            st.write("Query Received:", query)
-            answer = chat_with_assistant(query)
-            st.write(f"Assistant's answer: {answer}")
-        else:
-            st.warning("Please enter a question before clicking Submit.")
-
-with tab2:
-    st.subheader("Recent Queries")
-    history = get_query_history()
-    for query, answer, timestamp, sources in history:
-        with st.expander(f"Q: {query[:100]}... ({timestamp})"):
-            st.write("Question:", query)
-            st.write("Answer:", answer)
-            st.write("Sources Used:", sources)
-            st.divider()
+# Print database location for reference
+st.sidebar.write(f"Database location: {DB_PATH}")
 
 if __name__ == "__main__":
     # Initialize the database when the app starts
