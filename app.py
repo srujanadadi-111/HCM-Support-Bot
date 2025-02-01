@@ -3,13 +3,56 @@ import os
 import numpy as np
 import openai
 import streamlit as st
+import sqlite3
+from datetime import datetime
 
+# Database setup
+def init_db():
+    conn = sqlite3.connect('query_history.db')
+    c = conn.cursor()
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS queries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            query TEXT NOT NULL,
+            answer TEXT NOT NULL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            source_documents TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+def log_query(query, answer, source_documents):
+    conn = sqlite3.connect('query_history.db')
+    c = conn.cursor()
+    sources_str = '\n'.join([f"{doc}: {chunk}" for chunk, doc in source_documents])
+    c.execute('''
+        INSERT INTO queries (query, answer, source_documents)
+        VALUES (?, ?, ?)
+    ''', (query, answer, sources_str))
+    conn.commit()
+    conn.close()
+
+def get_query_history():
+    conn = sqlite3.connect('query_history.db')
+    c = conn.cursor()
+    c.execute('''
+        SELECT query, answer, timestamp, source_documents 
+        FROM queries 
+        ORDER BY timestamp DESC
+        LIMIT 50
+    ''')
+    history = c.fetchall()
+    conn.close()
+    return history
+
+# Initialize database
+init_db()
 
 # Load the document store from the file
 try:
     with open('document_store (5).pkl', 'rb') as f:
         document_store = pickle.load(f)
-    #st.write("Document store loaded successfully!")
 except FileNotFoundError:
     st.write("Error: The document store file 'document_store.pkl' was not found.")
     document_store = {}
@@ -17,14 +60,14 @@ except FileNotFoundError:
 # Setup OpenAI API Key
 openai.api_key = st.secrets["openai_api_key"]
 
-# Cosine similarity function for comparing embeddings
+# Cosine similarity function
 def cosine_similarity(vec1, vec2):
     vec1_norm = np.linalg.norm(vec1)
     vec2_norm = np.linalg.norm(vec2)
-
+    
     if vec1_norm == 0 or vec2_norm == 0:
         return 0.0
-
+    
     return np.dot(vec1, vec2) / (vec1_norm * vec2_norm)
 
 def generate_embeddings(texts, batch_size=10):
@@ -55,9 +98,6 @@ def retrieve_relevant_chunks(query, top_k=3):
 
 def chat_with_assistant(query):
     relevant_chunks = retrieve_relevant_chunks(query)
-    print(f"Relevant chunks for query '{query}':")
-    for chunk, doc in relevant_chunks:
-        print(f"Source ({doc}): {chunk}")
     context = "\n\n".join([f"Source ({doc}): {chunk}" for chunk, doc in relevant_chunks])
 
     response = openai.ChatCompletion.create(
@@ -83,11 +123,14 @@ def chat_with_assistant(query):
         max_tokens=500
     )
 
-    return response.choices[0].message.content.strip()
+    answer = response.choices[0].message.content.strip()
+    
+    # Log the query and answer
+    log_query(query, answer, relevant_chunks)
+    
+    return answer
 
 # Streamlit interface
-import streamlit as st
-
 # Initialize session state for tracking question clicks
 if 'question_clicks' not in st.session_state:
     st.session_state.question_clicks = {
@@ -97,9 +140,7 @@ if 'question_clicks' not in st.session_state:
     }
 
 def handle_trending_click(question):
-    # Update click count in session state
     st.session_state.question_clicks[question] += 1
-    # Set the clicked question as the current query
     st.session_state.query = question
     return question
 
@@ -107,38 +148,55 @@ def handle_trending_click(question):
 st.image("egovlogo.png", width=200)
 st.title("HCM Support Bot [Beta version]")
 
-# Notes Section
-st.subheader("Note:")
-st.markdown(
-    '<p style="color:red; font-size:16px;">Please try to be as in detail as possible with your prompt and use full forms for beta version, e.g., Health Campaign Management instead of HCM.</p>',
-    unsafe_allow_html=True,
-)
+# Create tabs
+tab1, tab2 = st.tabs(["Chat", "Query History"])
 
-# Trending Questions Section
-st.subheader("Trending Questions")
-col1, col2 = st.columns(2)
+with tab1:
+    # Notes Section
+    st.subheader("Note:")
+    st.markdown(
+        '<p style="color:red; font-size:16px;">Please try to be as in detail as possible with your prompt and use full forms for beta version, e.g., Health Campaign Management instead of HCM.</p>',
+        unsafe_allow_html=True,
+    )
 
-# First column of trending questions
-with col1:
-    for question in list(st.session_state.question_clicks.keys())[:3]:
-        if st.button(f"📈 {question}", key=f"btn_{question}"):
-            query = handle_trending_click(question)
+    # Trending Questions Section
+    st.subheader("Trending Questions")
+    col1, col2 = st.columns(2)
 
-# Second column of trending questions
-with col2:
-    for question in list(st.session_state.question_clicks.keys())[3:]:
-        if st.button(f"📈 {question}", key=f"btn_{question}"):
-            query = handle_trending_click(question)
+    # First column of trending questions
+    with col1:
+        for question in list(st.session_state.question_clicks.keys())[:3]:
+            if st.button(f"📈 {question}", key=f"btn_{question}"):
+                query = handle_trending_click(question)
 
-# User input section
-query = st.text_input("Ask a question:", key="query")
-submit_button = st.button("Submit")
+    # Second column of trending questions
+    with col2:
+        for question in list(st.session_state.question_clicks.keys())[3:]:
+            if st.button(f"📈 {question}", key=f"btn_{question}"):
+                query = handle_trending_click(question)
 
-if submit_button:
-    if query.strip():
-        st.write("Query Received:", query)
-        answer = chat_with_assistant(query)
-        st.write(f"Assistant's answer: {answer}")
-    else:
-        st.warning("Please enter a question before clicking Submit.")
+    # User input section
+    query = st.text_input("Ask a question:", key="query")
+    submit_button = st.button("Submit")
 
+    if submit_button:
+        if query.strip():
+            st.write("Query Received:", query)
+            answer = chat_with_assistant(query)
+            st.write(f"Assistant's answer: {answer}")
+        else:
+            st.warning("Please enter a question before clicking Submit.")
+
+with tab2:
+    st.subheader("Recent Queries")
+    history = get_query_history()
+    for query, answer, timestamp, sources in history:
+        with st.expander(f"Q: {query[:100]}... ({timestamp})"):
+            st.write("Question:", query)
+            st.write("Answer:", answer)
+            st.write("Sources Used:", sources)
+            st.divider()
+
+if __name__ == "__main__":
+    # Initialize the database when the app starts
+    init_db()
