@@ -108,6 +108,9 @@ def handle_trending_click(question):
 st.image("egovlogo.png", width=200)
 st.title("HCM Support Bot [Beta version]")
 
+# Notes Section
+st.subheader("Please try to be as in detail as possible with your prompt and use full forms for beta version, for example: Health Campaign Management instead of HCM, etc.")
+
 # Trending Questions Section
 st.subheader("Trending Questions")
 col1, col2 = st.columns(2)
