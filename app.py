@@ -120,13 +120,13 @@ col1, col2 = st.columns(2)
 
 # First column of trending questions
 with col1:
-    for question in list(st.session_state.question_clicks.keys())[:3]:
+    for question in list(st.session_state.question_clicks.keys())[:1]:
         if st.button(f"📈 {question}", key=f"btn_{question}"):
             query = handle_trending_click(question)
 
 # Second column of trending questions
 with col2:
-    for question in list(st.session_state.question_clicks.keys())[3:]:
+    for question in list(st.session_state.question_clicks.keys())[1:]:
         if st.button(f"📈 {question}", key=f"btn_{question}"):
             query = handle_trending_click(question)
 
