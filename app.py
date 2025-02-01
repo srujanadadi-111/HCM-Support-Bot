@@ -3,50 +3,13 @@ import os
 import numpy as np
 import openai
 import streamlit as st
-import sqlite3
-from datetime import datetime
 
-# Create a specific directory for the database
-DB_DIR = "C:/Users/egov-/Desktop/queries"  # Change this path as needed
-if not os.path.exists(DB_DIR):
-    os.makedirs(DB_DIR)
-
-DB_PATH = os.path.join(DB_DIR, "query_history.db")
-
-# Database setup
-def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS queries (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            query TEXT NOT NULL,
-            answer TEXT NOT NULL,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            source_documents TEXT
-        )
-    ''')
-    conn.commit()
-    conn.close()
-
-def log_query(query, answer, source_documents):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    sources_str = '\n'.join([f"{doc}: {chunk}" for chunk, doc in source_documents])
-    c.execute('''
-        INSERT INTO queries (query, answer, source_documents)
-        VALUES (?, ?, ?)
-    ''', (query, answer, sources_str))
-    conn.commit()
-    conn.close()
-
-# Initialize database
-init_db()
 
 # Load the document store from the file
 try:
     with open('document_store (5).pkl', 'rb') as f:
         document_store = pickle.load(f)
+    #st.write("Document store loaded successfully!")
 except FileNotFoundError:
     st.write("Error: The document store file 'document_store.pkl' was not found.")
     document_store = {}
@@ -54,14 +17,14 @@ except FileNotFoundError:
 # Setup OpenAI API Key
 openai.api_key = st.secrets["openai_api_key"]
 
-# Cosine similarity function
+# Cosine similarity function for comparing embeddings
 def cosine_similarity(vec1, vec2):
     vec1_norm = np.linalg.norm(vec1)
     vec2_norm = np.linalg.norm(vec2)
-    
+
     if vec1_norm == 0 or vec2_norm == 0:
         return 0.0
-    
+
     return np.dot(vec1, vec2) / (vec1_norm * vec2_norm)
 
 def generate_embeddings(texts, batch_size=10):
@@ -92,6 +55,9 @@ def retrieve_relevant_chunks(query, top_k=3):
 
 def chat_with_assistant(query):
     relevant_chunks = retrieve_relevant_chunks(query)
+    print(f"Relevant chunks for query '{query}':")
+    for chunk, doc in relevant_chunks:
+        print(f"Source ({doc}): {chunk}")
     context = "\n\n".join([f"Source ({doc}): {chunk}" for chunk, doc in relevant_chunks])
 
     response = openai.ChatCompletion.create(
@@ -117,14 +83,11 @@ def chat_with_assistant(query):
         max_tokens=500
     )
 
-    answer = response.choices[0].message.content.strip()
-    
-    # Log the query and answer
-    log_query(query, answer, relevant_chunks)
-    
-    return answer
+    return response.choices[0].message.content.strip()
 
 # Streamlit interface
+import streamlit as st
+
 # Initialize session state for tracking question clicks
 if 'question_clicks' not in st.session_state:
     st.session_state.question_clicks = {
@@ -134,7 +97,9 @@ if 'question_clicks' not in st.session_state:
     }
 
 def handle_trending_click(question):
+    # Update click count in session state
     st.session_state.question_clicks[question] += 1
+    # Set the clicked question as the current query
     st.session_state.query = question
     return question
 
@@ -177,9 +142,3 @@ if submit_button:
     else:
         st.warning("Please enter a question before clicking Submit.")
 
-# Print database location for reference
-st.sidebar.write(f"Database location: {DB_PATH}")
-
-if __name__ == "__main__":
-    # Initialize the database when the app starts
-    init_db()
