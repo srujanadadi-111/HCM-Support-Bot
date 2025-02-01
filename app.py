@@ -109,7 +109,11 @@ st.image("egovlogo.png", width=200)
 st.title("HCM Support Bot [Beta version]")
 
 # Notes Section
-st.subheader("Please try to be as in detail as possible with your prompt and use full forms for beta version, for example: Health Campaign Management instead of HCM, etc.")
+st.subheader("Please try to be as in detail as possible with your prompt:")
+st.markdown(
+    '<p style="color:red; font-size:12px;">Use full forms for beta version, e.g., Health Campaign Management instead of HCM.</p>',
+    unsafe_allow_html=True,
+)
 
 # Trending Questions Section
 st.subheader("Trending Questions")
