@@ -93,7 +93,6 @@ if 'question_clicks' not in st.session_state:
     st.session_state.question_clicks = {
         "What is HCM?": 0,
         "How do you do custom report generation?": 0,
-        "What are the features of HCM?": 0,
         "What are the steps involved in creating a KPI?": 0,
         "What is a data view?": 0
     }
