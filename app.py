@@ -7,7 +7,7 @@ import sqlite3
 from datetime import datetime
 
 # Create a specific directory for the database
-DB_DIR = "C:/HCM_Bot_Data"  # Change this path as needed
+DB_DIR = "C:\Users\egov-\Desktop\queries"  # Change this path as needed
 if not os.path.exists(DB_DIR):
     os.makedirs(DB_DIR)
 
