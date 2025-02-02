@@ -104,7 +104,7 @@ def handle_trending_click(question):
 
 # Main interface
 st.image("egovlogo.png", width=200)
-st.title("HCM Support Bot [Beta version]")
+st.title("Health Campaign Management (HCM) Support Bot [Beta version]")
 
 # Notes Section
 st.subheader("Note:")
