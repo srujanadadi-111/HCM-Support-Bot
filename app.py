@@ -3,7 +3,6 @@ import os
 import numpy as np
 import openai
 import streamlit as st
-from pymongo import MongoClient
 
 
 # Load the document store from the file
@@ -17,21 +16,6 @@ except FileNotFoundError:
 
 # Setup OpenAI API Key
 openai.api_key = st.secrets["openai_api_key"]
-mongo_uri = st.secrets["mongo_uri"]
-
-# Connect to MongoDB Atlas
-client = MongoClient(mongo_uri)
-db = client["hcm"]  # Replace with your database name
-collection = db["support-bot"]  # Collection to store queries and responses
-
-
-try:
-    client.admin.command('ping')
-    print("Pinged your deployment. You successfully connected to MongoDB!")
-except Exception as e:
-    print(e)
-
-
 
 # Cosine similarity function for comparing embeddings
 def cosine_similarity(vec1, vec2):
@@ -98,16 +82,8 @@ def chat_with_assistant(query):
         temperature=0.3,
         max_tokens=500
     )
-    
-    answer = response.choices[0].message.content.strip()
 
-    # Store query and response in MongoDB
-    collection.insert_one({
-        "query": query,
-        "response": answer
-    })
-
-    return answer
+    return response.choices[0].message.content.strip()
 
 # Streamlit interface
 import streamlit as st
@@ -164,4 +140,3 @@ if submit_button:
         st.write(f"Assistant's answer: {answer}")
     else:
         st.warning("Please enter a question before clicking Submit.")
-
