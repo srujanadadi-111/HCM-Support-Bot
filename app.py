@@ -96,7 +96,7 @@ def chat_with_assistant(query):
             }
         ],
         temperature=0.3,
-        max_tokens=500
+        max_tokens=1000
     )
     
     answer = response.choices[0].message.content.strip()
