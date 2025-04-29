@@ -8,13 +8,12 @@ Original file is located at
 """
 
 #installation of previous version of openai
-!pip install openai==0.28
-
-# Install required packages
-!pip install chromadb pymupdf python-pptx openpyxl
-
-!pip install boto3
-
+import openai
+import chromadb
+import fitz  # for pymupdf
+import pptx  # for python-pptx
+import openpyxl
+import boto3
 import os
 
 aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
