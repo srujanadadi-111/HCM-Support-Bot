@@ -7,3 +7,6 @@ PyMuPDF
 python-pptx
 openpyxl
 pymongo
+slack_sdk
+reportlab
+boto3
