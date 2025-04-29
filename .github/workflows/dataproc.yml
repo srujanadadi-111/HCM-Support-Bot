@@ -2,11 +2,11 @@ name: Daily Data Processing Workflow
 
 on:
   schedule:
-    - cron: '45 6 * * *'
-  workflow_dispatch: # Allows manual triggering
+    - cron: '0 21 * * *'  # 9 PM UTC daily
+  workflow_dispatch:
 
 permissions:
-  contents: write  # Required for pushing changes to the repository
+  contents: write
 
 jobs:
   run_scripts:
@@ -26,38 +26,50 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Run slackintegrationgit.py
-        run: python slackintegrationgit.py
+        id: slack
+        run: |
+          python slackintegrationgit.py
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
+      - name: Check for new Slack messages
+        id: check_messages
+        run: |
+          if [ -f new_messages_found.flag ]; then
+            echo "new_messages=true" >> $GITHUB_OUTPUT
+          else
+            echo "new_messages=false" >> $GITHUB_OUTPUT
+            echo "No new Slack messages for today. Exiting workflow."
+            exit 0
+          fi
+
       - name: Delete existing s3_document_store.pkl
+        if: steps.check_messages.outputs.new_messages == 'true'
         run: |
           if [ -f s3_document_store.pkl ]; then
             rm s3_document_store.pkl
           fi
 
       - name: Run chromaraggit.py
+        if: steps.check_messages.outputs.new_messages == 'true'
         run: python chromaraggit.py
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
-      - name: Check if new file was created
-        id: check_file
-        run: |
-          if [ -f s3_document_store.pkl ]; then
-            echo "file_exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "file_exists=false" >> $GITHUB_OUTPUT
-            echo "Error: s3_document_store.pkl was not created by chromaraggit.py"
-            exit 1
-          fi
+      - name: Run app.py
+        if: steps.check_messages.outputs.new_messages == 'true'
+        run: python app.py
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
       - name: Commit and push changes
-        if: steps.check_file.outputs.file_exists == 'true'
+        if: steps.check_messages.outputs.new_messages == 'true'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
