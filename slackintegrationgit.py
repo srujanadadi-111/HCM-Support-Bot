@@ -7,11 +7,9 @@ Original file is located at
     https://colab.research.google.com/drive/13SuASlTA314dkFoug5L5-3xAK6YwwpcI
 """
 
-pip install slack_sdk
-
-pip install reportlab
-
-pip install boto3
+from slack_sdk import WebClient
+import reportlab
+import boto3
 
 import os
 
