@@ -10,3 +10,4 @@ pymongo
 slack_sdk
 reportlab
 boto3
+chromadb
