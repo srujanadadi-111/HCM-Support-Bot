@@ -1,0 +1,66 @@
+name: Daily Data Processing Workflow
+
+on:
+  schedule:
+    - cron: '45 6 * * *'
+  workflow_dispatch: # Allows manual triggering
+
+permissions:
+  contents: write  # Required for pushing changes to the repository
+
+jobs:
+  run_scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Run slackintegrationgit.py
+        run: python slackintegrationgit.py
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
+      - name: Delete existing s3_document_store.pkl
+        run: |
+          if [ -f s3_document_store.pkl ]; then
+            rm s3_document_store.pkl
+          fi
+
+      - name: Run chromaraggit.py
+        run: python chromaraggit.py
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
+      - name: Check if new file was created
+        id: check_file
+        run: |
+          if [ -f s3_document_store.pkl ]; then
+            echo "file_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "file_exists=false" >> $GITHUB_OUTPUT
+            echo "Error: s3_document_store.pkl was not created by chromaraggit.py"
+            exit 1
+          fi
+
+      - name: Commit and push changes
+        if: steps.check_file.outputs.file_exists == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add s3_document_store.pkl
+          git commit -m "Update s3_document_store.pkl $(date)"
+          git push
