@@ -7,11 +7,11 @@ Original file is located at
     https://colab.research.google.com/drive/13SuASlTA314dkFoug5L5-3xAK6YwwpcI
 """
 
-!pip install slack_sdk
+pip install slack_sdk
 
-!pip install reportlab
+pip install reportlab
 
-!pip install boto3
+pip install boto3
 
 import os
 
