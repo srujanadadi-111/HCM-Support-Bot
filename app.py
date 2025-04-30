@@ -16,13 +16,14 @@ except FileNotFoundError:
     document_store = {}
 
 # Setup OpenAI API Key
-openai.api_key = st.secrets["openai_api_key"]
-mongo_uri = st.secrets["mongo_uri"]
+import os
+openai.api_key = os.environ["OPENAI_API_KEY"]
+#mongo_uri = st.secrets["mongo_uri"]
 
 # Connect to MongoDB Atlas
-client = MongoClient(mongo_uri)
-db = client["hcm"]  # Replace with your database name
-collection = db["support-bot"]  # Collection to store queries and responses
+#client = MongoClient(mongo_uri)
+#db = client["hcm"]  # Replace with your database name
+#collection = db["support-bot"]  # Collection to store queries and responses
 
 
 try:
