@@ -101,8 +101,6 @@ import numpy as np
 import nltk
 nltk.download('punkt')
 
-from google.colab import userdata
-userdata.get('OPENAI_API_KEY')
 
 #replace null characters, converts to ASCII, removes double spaces and newlines
 def clean_text(text):
