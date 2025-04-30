@@ -25,33 +25,32 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Run slackintegrationgit.py
-        run: python slackintegrationgit.py
+      - name: Run slackintegrationgit.py and capture output
+        id: slack
+        run: |
+          python slackintegrationgit.py | tee slack_output.log
+          # Check if PDF was generated and uploaded
+          if grep -q "Uploaded hcmsupportbot_" slack_output.log; then
+            echo "pdf_status=generated" >> $GITHUB_OUTPUT
+          elif grep -q "No messages found for today." slack_output.log; then
+            echo "pdf_status=none" >> $GITHUB_OUTPUT
+          else
+            echo "pdf_status=error" >> $GITHUB_OUTPUT
+          fi
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
-      - name: Check if PDF was created
-        id: check_pdf
-        run: |
-          if ls hcmsupportbot_*.pdf 1> /dev/null 2>&1; then
-            echo "pdf_exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "pdf_exists=false" >> $GITHUB_OUTPUT
-            echo "No PDF generated. Exiting workflow."
-            exit 0
-          fi
-
       - name: Delete existing s3_document_store.pkl
-        if: steps.check_pdf.outputs.pdf_exists == 'true'
+        if: steps.slack.outputs.pdf_status == 'generated'
         run: |
           if [ -f s3_document_store.pkl ]; then
             rm s3_document_store.pkl
           fi
 
       - name: Run chromaraggit.py
-        if: steps.check_pdf.outputs.pdf_exists == 'true'
+        if: steps.slack.outputs.pdf_status == 'generated'
         run: python chromaraggit.py
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -59,7 +58,7 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
       - name: Run app.py
-        if: steps.check_pdf.outputs.pdf_exists == 'true'
+        if: steps.slack.outputs.pdf_status == 'generated'
         run: python app.py
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -67,7 +66,7 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
       - name: Commit and push changes
-        if: steps.check_pdf.outputs.pdf_exists == 'true'
+        if: steps.slack.outputs.pdf_status == 'generated'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
