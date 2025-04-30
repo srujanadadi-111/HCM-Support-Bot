@@ -26,34 +26,32 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Run slackintegrationgit.py
-        id: slack
-        run: |
-          python slackintegrationgit.py
+        run: python slackintegrationgit.py
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
-      - name: Check for new Slack messages
-        id: check_messages
+      - name: Check if PDF was created
+        id: check_pdf
         run: |
-          if [ -f new_messages_found.flag ]; then
-            echo "new_messages=true" >> $GITHUB_OUTPUT
+          if ls hcmsupportbot_*.pdf 1> /dev/null 2>&1; then
+            echo "pdf_exists=true" >> $GITHUB_OUTPUT
           else
-            echo "new_messages=false" >> $GITHUB_OUTPUT
-            echo "No new Slack messages for today. Exiting workflow."
+            echo "pdf_exists=false" >> $GITHUB_OUTPUT
+            echo "No PDF generated. Exiting workflow."
             exit 0
           fi
 
       - name: Delete existing s3_document_store.pkl
-        if: steps.check_messages.outputs.new_messages == 'true'
+        if: steps.check_pdf.outputs.pdf_exists == 'true'
         run: |
           if [ -f s3_document_store.pkl ]; then
             rm s3_document_store.pkl
           fi
 
       - name: Run chromaraggit.py
-        if: steps.check_messages.outputs.new_messages == 'true'
+        if: steps.check_pdf.outputs.pdf_exists == 'true'
         run: python chromaraggit.py
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -61,7 +59,7 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
       - name: Run app.py
-        if: steps.check_messages.outputs.new_messages == 'true'
+        if: steps.check_pdf.outputs.pdf_exists == 'true'
         run: python app.py
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -69,7 +67,7 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
       - name: Commit and push changes
-        if: steps.check_messages.outputs.new_messages == 'true'
+        if: steps.check_pdf.outputs.pdf_exists == 'true'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
