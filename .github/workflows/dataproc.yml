@@ -50,9 +50,9 @@ jobs:
             git config --local user.name "github-actions[bot]"
             git add s3_document_store.pkl
             git commit -m "Delete s3_document_store.pkl"
+            git pull --rebase origin main
             git push
           fi
-
 
       - name: Run chromaraggit.py
         if: steps.slack.outputs.pdf_status == 'generated'
