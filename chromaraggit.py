@@ -49,7 +49,7 @@ def download_pdfs_from_s3_prefixes(bucket_name, prefixes, local_folder):
 
 # Usage:
 AWS_BUCKET_NAME = 'hcmbotknowledgesource'
-local_pdf_folder = '/content/pdfs2'
+local_pdf_folder = 'pdfs2'
 
 # First run:
 #download_pdfs_from_s3_prefixes(AWS_BUCKET_NAME, ['slack_pdfs/', 'base_pdfs/'], local_pdf_folder)
