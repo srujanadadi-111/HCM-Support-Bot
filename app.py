@@ -17,7 +17,7 @@ except FileNotFoundError:
 
 # Setup OpenAI API Key
 import streamlit as st
-openai.api_key = os.environ["OPENAI_API_KEY"]
+openai.api_key = st.secrets["OPENAI_API_KEY"]
 #mongo_uri = st.secrets["mongo_uri"]
 
 # Connect to MongoDB Atlas
