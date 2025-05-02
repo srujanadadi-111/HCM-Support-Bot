@@ -14,11 +14,20 @@ try:
 except FileNotFoundError:
     st.write("Error: The document store file 'document_store.pkl' was not found.")
     document_store = {}
+    
+import os
+import streamlit as st
+
+if "OPENAI_API_KEY" in st.secrets:
+    openai.api_key = st.secrets["OPENAI_API_KEY"]
+else:
+    openai.api_key = os.environ.get("OPENAI_API_KEY")
 
 # Setup OpenAI API Key
-import streamlit as st
-openai.api_key = st.secrets["OPENAI_API_KEY"]
+#import streamlit as st
+#openai.api_key = st.secrets["OPENAI_API_KEY"]
 #mongo_uri = st.secrets["mongo_uri"]
+
 
 # Connect to MongoDB Atlas
 #client = MongoClient(mongo_uri)
