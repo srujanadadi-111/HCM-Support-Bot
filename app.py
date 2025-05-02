@@ -113,10 +113,10 @@ def chat_with_assistant(query):
     answer = response.choices[0].message.content.strip()
 
     # Store query and response in MongoDB
-    collection.insert_one({
-        "query": query,
-        "response": answer
-    })
+    #collection.insert_one({
+     #   "query": query,
+      #  "response": answer
+    #})
 
     return answer
 
