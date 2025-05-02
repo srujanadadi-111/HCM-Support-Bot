@@ -169,25 +169,6 @@ with col2:
 query = st.text_input("Ask a question:", key="query")
 submit_button = st.button("Submit")
 
-# After loading document_store
-st.write(f"Loaded {len(document_store)} documents.")
-
-# After generating query embedding
-embeddings = generate_embeddings([query])
-if not embeddings:
-    st.error("Failed to generate query embedding. Check your OpenAI API key.")
-    return []
-
-# After retrieving chunks
-relevant_chunks = retrieve_relevant_chunks(query)
-st.write("Relevant Chunks:", relevant_chunks)
-if not relevant_chunks:
-    st.warning("No relevant chunks found for your query.")
-
-# Before sending to LLM
-context = "\n\n".join([f"Source ({doc}): {chunk}" for chunk, doc in relevant_chunks])
-st.write("Context sent to LLM:", context)
-
 if submit_button:
     if query.strip():
         st.write("Query Received:", query)
