@@ -36,11 +36,11 @@ except (KeyError, AttributeError, RuntimeError, Exception):
 #collection = db["support-bot"]  # Collection to store queries and responses
 
 
-try:
-    client.admin.command('ping')
-    print("Pinged your deployment. You successfully connected to MongoDB!")
-except Exception as e:
-    print(e)
+#try:
+    #client.admin.command('ping')
+    #print("Pinged your deployment. You successfully connected to MongoDB!")
+#except Exception as e:
+    #print(e)
 
 
 
