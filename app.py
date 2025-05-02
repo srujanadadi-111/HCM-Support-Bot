@@ -18,10 +18,11 @@ except FileNotFoundError:
 import os
 import streamlit as st
 
-if "OPENAI_API_KEY" in st.secrets:
+try:
     openai.api_key = st.secrets["OPENAI_API_KEY"]
-else:
+except (KeyError, AttributeError, RuntimeError, Exception):
     openai.api_key = os.environ.get("OPENAI_API_KEY")
+
 
 # Setup OpenAI API Key
 #import streamlit as st
