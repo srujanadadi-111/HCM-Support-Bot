@@ -42,14 +42,14 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
-      - name: Delete existing s3_document_store.pkl
+      - name: Delete existing documen_store.pkl
         run: |
-          if [ -f s3_document_store.pkl ]; then
-            rm s3_document_store.pkl
+          if [ -f documen_store.pkl ]; then
+            rm documen_store.pkl
             git config --local user.email "github-actions[bot]@users.noreply.github.com"
             git config --local user.name "github-actions[bot]"
-            git add -u s3_document_store.pkl
-            git commit -m "Delete s3_document_store.pkl"
+            git add -u documen_store.pkl
+            git commit -m "Delete documen_store.pkl"
             git pull --rebase origin main
             git push
           fi
