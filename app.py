@@ -7,7 +7,7 @@ from pymongo import MongoClient
 
 # Load the document store from the file
 try:
-    with open('documen_store.pkl', 'rb') as f:
+    with open('documen_store_og.pkl', 'rb') as f:
         document_store = pickle.load(f)
     #st.write("Document store loaded successfully!")
 except FileNotFoundError:
