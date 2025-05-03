@@ -93,8 +93,8 @@ jobs:
           git add .gitignore
   
           # Check if documen_store.pkl exists and has changes
-          if [ -f documen_store.pkl ]; then
-            git add documen_store.pkl
+          if [ -f documen_store_og.pkl ]; then
+            git add documen_store_og.pkl
     
             # Check if there are changes to commit
             if git diff --staged --quiet; then
@@ -105,7 +105,7 @@ jobs:
               git push
             fi
           else
-            echo "documen_store.pkl file not found"
+            echo "documen_store_og.pkl file not found"
             exit 1
           fi
 
