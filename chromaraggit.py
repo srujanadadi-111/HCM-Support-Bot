@@ -106,13 +106,18 @@ def load_document_store(pickle_file_path):
 
 # Function to process and append new PDFs from slack_pdfs to existing document store
 def process_and_append_slack_pdfs(bucket_name, slack_prefix, local_pdf_folder, pickle_file_path):
-    # Load existing document store
+    # Load existing document store from the specified path
     document_store = load_document_store(pickle_file_path)
+    
+    # Print document store info before processing
+    print(f"Loaded document store with {len(document_store)} documents")
+    print(f"Document keys: {list(document_store.keys())[:5]}...")
     
     # Download new PDFs from slack_pdfs
     download_pdfs_from_s3_prefixes(bucket_name, [slack_prefix], local_pdf_folder)
     
     # Process new PDFs and append to document_store
+    new_docs_added = 0
     for filename in os.listdir(local_pdf_folder):
         if filename.endswith('.pdf'):
             file_path = os.path.join(local_pdf_folder, filename)
@@ -125,16 +130,31 @@ def process_and_append_slack_pdfs(bucket_name, slack_prefix, local_pdf_folder, p
             text = extract_text_from_pdf(file_path)
             clean_doc_text = clean_text(text)
             text_chunks = split_text_into_chunks(clean_doc_text)
+            
+            if not text_chunks:
+                print(f"Warning: No chunks generated for {filename}, skipping.")
+                continue
+                
             embeddings = generate_embeddings(text_chunks)
+            
+            if len(embeddings) != len(text_chunks):
+                print(f"Warning: Mismatch between chunks and embeddings for {filename}. Got {len(embeddings)} embeddings for {len(text_chunks)} chunks.")
+                text_chunks = text_chunks[:len(embeddings)]
+            
+            # Add source prefix to help with retrieval
+            prefixed_chunks = [f"[SLACK PDF: {filename}] {chunk}" for chunk in text_chunks]
             
             # Append to document_store
             document_store[filename.lower()] = {
-                "chunks": text_chunks[:len(embeddings)],
+                "chunks": prefixed_chunks,
                 "embeddings": embeddings,
-                "source": "pdf",
+                "source": "slack_pdf",
                 "original_filename": filename
             }
+            new_docs_added += 1
             print(f"Appended {filename} to the document store.")
+    
+    print(f"Added {new_docs_added} new documents to the store")
     
     # Save updated document_store back to pickle
     with open(pickle_file_path, 'wb') as f:
@@ -143,12 +163,12 @@ def process_and_append_slack_pdfs(bucket_name, slack_prefix, local_pdf_folder, p
     
     return document_store
 
-# Cosine similarity function for retrieval
+# Enhanced cosine similarity function with better numerical stability
 def cosine_similarity(vec1, vec2):
     vec1_norm = np.linalg.norm(vec1)
     vec2_norm = np.linalg.norm(vec2)
 
-    if vec1_norm == 0 or vec2_norm == 0:
+    if vec1_norm < 1e-10 or vec2_norm < 1e-10:
         return 0.0
 
     return np.dot(vec1, vec2) / (vec1_norm * vec2_norm)
@@ -170,17 +190,41 @@ def is_relevant_content(chunk, query):
 
     return terms_found > 0
 
-# Function to retrieve relevant chunks
-def retrieve_relevant_chunks(query, document_store, top_k=3):
+# Improved function to retrieve relevant chunks with hybrid approach
+def retrieve_relevant_chunks(query, document_store, top_k=5):
     query_embedding = generate_embeddings([query])[0]
     similarities = []
-
+    
+    # Extract key terms from query for keyword matching
+    query_terms = set(term.lower() for term in query.split() 
+                     if term.lower() not in {'how', 'what', 'when', 'where', 'do', 'does', 'is', 'are', 'the'})
+    
     for doc_name, doc_data in document_store.items():
-        for chunk, chunk_embedding in zip(doc_data["chunks"], doc_data["embeddings"]):
+        for i, (chunk, chunk_embedding) in enumerate(zip(doc_data["chunks"], doc_data["embeddings"])):
+            # Calculate vector similarity
             similarity = cosine_similarity(query_embedding, chunk_embedding)
-            similarities.append((chunk, similarity, doc_name))
+            
+            # Calculate keyword match score
+            chunk_lower = chunk.lower()
+            keyword_matches = sum(1 for term in query_terms if term in chunk_lower)
+            
+            # Boost score for slack PDFs if query seems to target them
+            source_boost = 0.1 if doc_data.get("source") == "slack_pdf" and "slack" in query.lower() else 0
+            
+            # Combine scores (vector similarity is primary, keywords provide a boost)
+            combined_score = similarity + (keyword_matches * 0.05) + source_boost
+            
+            similarities.append((chunk, combined_score, doc_name))
 
+    # Get top results by combined score
     relevant_chunks = sorted(similarities, key=lambda x: x[1], reverse=True)[:top_k]
+    
+    # Debug info
+    if not relevant_chunks:
+        print("Warning: No relevant chunks found for query:", query)
+    else:
+        print(f"Top similarity score: {relevant_chunks[0][1]:.4f} for document: {relevant_chunks[0][2]}")
+    
     return [(chunk, doc_name) for chunk, _, doc_name in relevant_chunks]
 
 # Function to chat with assistant
@@ -219,7 +263,7 @@ if __name__ == "__main__":
     AWS_BUCKET_NAME = 'hcmbotknowledgesource'
     SLACK_PREFIX = 'slack_pdfs/'
     LOCAL_PDF_FOLDER = 'pdfs2'
-    PICKLE_FILE_PATH = 'documen_store.pkl'  # Updated to use the existing file
+    PICKLE_FILE_PATH = 'documen_store.pkl'  # Fixed to use the existing file
     
     # Process and append new PDFs from slack_pdfs to existing document store
     document_store = process_and_append_slack_pdfs(
@@ -230,3 +274,8 @@ if __name__ == "__main__":
     )
     
     print(f"Document store now contains {len(document_store)} documents")
+    
+    # Optional: Test retrieval with a sample query
+    test_query = "What information is in the slack PDFs?"
+    relevant_chunks = retrieve_relevant_chunks(test_query, document_store)
+    print(f"Found {len(relevant_chunks)} relevant chunks for test query")
