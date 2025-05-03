@@ -55,7 +55,7 @@ local_pdf_folder = 'pdfs2'
 download_pdfs_from_s3_prefixes(AWS_BUCKET_NAME, ['base_pdfs/'], local_pdf_folder)
 
 # Later runs:
-download_pdfs_from_s3_prefixes(AWS_BUCKET_NAME, ['slack_pdfs/'], local_pdf_folder)
+#download_pdfs_from_s3_prefixes(AWS_BUCKET_NAME, ['slack_pdfs/'], local_pdf_folder)
 
 import os
 import openai
