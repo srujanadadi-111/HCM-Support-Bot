@@ -77,6 +77,36 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add documen_store.pkl
-          git commit -m "Update s3_document_store.pkl $(date)"
-          git push
+  
+          # Create or update .gitignore to exclude temporary files
+          if [ ! -f .gitignore ]; then
+            echo "pdfs2/" > .gitignore
+            echo "slack_output.log" >> .gitignore
+            echo "*.log" >> .gitignore
+          else
+            grep -q "pdfs2/" .gitignore || echo "pdfs2/" >> .gitignore
+            grep -q "slack_output.log" .gitignore || echo "slack_output.log" >> .gitignore
+            grep -q "*.log" .gitignore || echo "*.log" >> .gitignore
+          fi
+
+          # Add .gitignore first
+          git add .gitignore
+  
+          # Check if documen_store.pkl exists and has changes
+          if [ -f documen_store.pkl ]; then
+            git add documen_store.pkl
+    
+            # Check if there are changes to commit
+            if git diff --staged --quiet; then
+              echo "No changes to commit in documen_store.pkl"
+              exit 0
+            else
+              git commit -m "Update document store $(date)"
+              git push
+            fi
+          else
+            echo "documen_store.pkl file not found"
+            exit 1
+          fi
+
+         
