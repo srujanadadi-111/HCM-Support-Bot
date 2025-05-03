@@ -263,7 +263,7 @@ if __name__ == "__main__":
     AWS_BUCKET_NAME = 'hcmbotknowledgesource'
     SLACK_PREFIX = 'slack_pdfs/'
     LOCAL_PDF_FOLDER = 'pdfs2'
-    PICKLE_FILE_PATH = 'documen_store.pkl'  # Fixed to use the existing file
+    PICKLE_FILE_PATH = 'documen_store_og.pkl'  # Fixed to use the existing file
     
     # Process and append new PDFs from slack_pdfs to existing document store
     document_store = process_and_append_slack_pdfs(
