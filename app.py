@@ -9,7 +9,9 @@ from pymongo import MongoClient
 try:
     with open('s3_document_store.pkl', 'rb') as f:
         document_store = pickle.load(f)
+        st.write(s3_document_store.pkl)
     #st.write("Document store loaded successfully!")
+    
 except FileNotFoundError:
     st.write("Error: The document store file 'documen_store.pkl' was not found.")
     document_store = {}
