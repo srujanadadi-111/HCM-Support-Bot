@@ -41,7 +41,7 @@ jobs:
         id: slack
         run: |
           # Create slackintegration.py script
-          cat > slackintegration.py << 'EOL'
+          cat > slackintegration.py << EOL
           import os
           import time
           import datetime
@@ -122,7 +122,7 @@ jobs:
           def save_to_pdf(messages, filename):
               doc = SimpleDocTemplate(filename, pagesize=letter)
               flowables = []
-              header_text = f"Daily #hcmsupportbot Messages\n{datetime.datetime.now().strftime('%Y-%m-%d')}"
+              header_text = f"Daily #hcmsupportbot Messages\\n{datetime.datetime.now().strftime('%Y-%m-%d')}"
               flowables.append(Paragraph(header_text, style_header))
 
               for msg in messages:
@@ -208,7 +208,7 @@ jobs:
 
           if __name__ == "__main__":
               main()
-          EOL
+EOL
           
           # Run the script
           python slackintegration.py | tee slack_output.log
@@ -276,7 +276,7 @@ jobs:
         if: steps.slack.outputs.pdf_status == 'generated'
         run: |
           # Create chromarag.py script to process and append slack data
-          cat > chromarag.py << 'EOL'
+          cat > chromarag.py << EOL
           import os
           import pickle
           import numpy as np
@@ -308,4 +308,155 @@ jobs:
                       print(f"Error generating embeddings for batch {i}-{i+batch_size}: {e}")
               return embeddings
           
-          def process_and_append_slack_data(slack_pickle
+          def process_and_append_slack_data(slack_pickle_file, document_store_file):
+              # Load the document store
+              try:
+                  with open(document_store_file, 'rb') as f:
+                      document_store = pickle.load(f)
+                  print(f"Loaded document store with {len(document_store)} documents")
+              except Exception as e:
+                  print(f"Error loading document store: {e}")
+                  return False
+              
+              # Load the slack pickle
+              try:
+                  with open(slack_pickle_file, 'rb') as f:
+                      slack_data = pickle.load(f)
+                  print(f"Loaded slack data with {len(slack_data)} entries")
+              except Exception as e:
+                  print(f"Error loading slack pickle: {e}")
+                  return False
+              
+              # Process each document in the slack data
+              for doc_name, doc_data in slack_data.items():
+                  chunks = doc_data.get("chunks", [])
+                  if chunks:
+                      print(f"Generating embeddings for {len(chunks)} chunks in {doc_name}")
+                      embeddings = generate_embeddings(chunks)
+                      
+                      # Update the embeddings in the slack data
+                      doc_data["embeddings"] = embeddings
+                      print(f"Generated {len(embeddings)} embeddings for {doc_name}")
+                  else:
+                      print(f"No chunks found in {doc_name}")
+              
+              # Append the processed slack data to the document store
+              document_store.update(slack_data)
+              print(f"Updated document store, now has {len(document_store)} documents")
+              
+              # Save the updated document store
+              with open(document_store_file, 'wb') as f:
+                  pickle.dump(document_store, f)
+              print(f"Saved updated document store to {document_store_file}")
+              
+              return True
+          
+          if __name__ == "__main__":
+              import sys
+              
+              if len(sys.argv) < 3:
+                  print("Usage: python chromarag.py <slack_pickle_file> <document_store_file>")
+                  sys.exit(1)
+              
+              slack_pickle_file = sys.argv[1]
+              document_store_file = sys.argv[2]
+              
+              success = process_and_append_slack_data(slack_pickle_file, document_store_file)
+              sys.exit(0 if success else 1)
+EOL
+          
+          # Run the script with the temporary slack file from the previous step
+          python chromarag.py "${{ steps.slack.outputs.temp_slack_file }}" "document_store.pkl"
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Upload updated document store to S3
+        if: steps.slack.outputs.pdf_status == 'generated'
+        run: |
+          python -c "
+          import boto3
+          import os
+          
+          # Get credentials from environment variables
+          aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
+          aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+          
+          # Create S3 client
+          s3 = boto3.client(
+              's3',
+              aws_access_key_id=aws_access_key_id,
+              aws_secret_access_key=aws_secret_access_key
+          )
+          
+          try:
+              # Upload to the root of the bucket, not to a subfolder
+              s3.upload_file('document_store.pkl', 'hcmbotknowledgesource', 'document_store.pkl')
+              print('Uploaded updated document store to S3 root')
+          except Exception as e:
+              print(f'Could not upload document store: {e}')
+          "
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Clean up old files in S3
+        if: steps.slack.outputs.pdf_status == 'generated'
+        run: |
+          python -c "
+          import boto3
+          import os
+          from datetime import datetime, timedelta
+          
+          # Get credentials from environment variables
+          aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
+          aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+          
+          # Create S3 client
+          s3 = boto3.client(
+              's3',
+              aws_access_key_id=aws_access_key_id,
+              aws_secret_access_key=aws_secret_access_key
+          )
+          
+          # Keep only the last 7 days of files
+          cutoff_date = datetime.now() - timedelta(days=7)
+          
+          try:
+              # List objects in the slack_pdfs prefix
+              response = s3.list_objects_v2(
+                  Bucket='hcmbotknowledgesource',
+                  Prefix='slack_pdfs/'
+              )
+              
+              if 'Contents' in response:
+                  for obj in response['Contents']:
+                      key = obj['Key']
+                      last_modified = obj['LastModified']
+                      
+                      # Delete old temporary pickle files
+                      if (last_modified < cutoff_date and key.endswith('.pkl')) or ('slack_data_' in key):
+                          s3.delete_object(Bucket='hcmbotknowledgesource', Key=key)
+                          print(f'Deleted old file: {key}')
+          except Exception as e:
+              print(f'Error cleaning up old files: {e}')
+          "
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Create .gitignore
+        run: |
+          # Create or update .gitignore to exclude temporary files
+          if [ ! -f .gitignore ]; then
+            echo "pdfs2/" > .gitignore
+            echo "slack_output.log" >> .gitignore
+            echo "*.log" >> .gitignore
+            echo "*.pkl" >> .gitignore
+          else
+            grep -q "pdfs2/" .gitignore || echo "pdfs2/" >> .gitignore
+            grep -q "slack_output.log" .gitignore || echo "slack_output.log" >> .gitignore
+            grep -q "*.log" .gitignore || echo "*.log" >> .gitignore
+            grep -q "*.pkl" .gitignore || echo "*.pkl" >> .gitignore
+          fi
