@@ -42,16 +42,27 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
-      - name: Download existing document store from S3
+      - name: Download or use existing document store
         run: |
           python -c "
           import boto3
+          import os
+          import shutil
+          
+          # Check if document_store.pkl exists in S3
           s3 = boto3.client('s3')
           try:
+              s3.head_object(Bucket='hcmbotknowledgesource', Key='document_store.pkl')
+              # If it exists, download it
               s3.download_file('hcmbotknowledgesource', 'document_store.pkl', 'document_store.pkl')
               print('Downloaded existing document store from S3')
           except Exception as e:
-              print(f'Could not download document store: {e}')
+              # If it doesn't exist or there's an error, use the local file
+              if os.path.exists('documen_store_og.pkl'):
+                  shutil.copy('documen_store_og.pkl', 'document_store.pkl')
+                  print('Using documen_store_og.pkl from repository as initial document store')
+              else:
+                  print(f'Could not download document store and documen_store_og.pkl not found: {e}')
           "
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
