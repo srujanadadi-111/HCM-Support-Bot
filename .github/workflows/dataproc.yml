@@ -25,10 +25,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install slack_sdk reportlab boto3 pymupdf python-pptx openpyxl nltk openai==0.28
 
-      - name: Run slackintegration.py and capture output
+      - name: Run slackintegrationgit.py and capture output
         id: slack
         run: |
-          python slackintegration.py | tee slack_output.log
+          python slackintegrationgit.py | tee slack_output.log
           # Check if PDF was generated and uploaded
           if grep -q "Uploaded hcmsupportbot_" slack_output.log; then
             echo "pdf_status=generated" >> $GITHUB_OUTPUT
