@@ -3,27 +3,53 @@ import os
 import numpy as np
 import openai
 import streamlit as st
-from pymongo import MongoClient
+import boto3
 
-# Load the document store from the file
-try:
-    with open('s3_document_store.pkl', 'rb') as f:
-        document_store = pickle.load(f)
-        st.write(s3_document_store.pkl)
-    #st.write("Document store loaded successfully!")
-    
-except FileNotFoundError:
-    st.write("Error: The document store file 'documen_store.pkl' was not found.")
-    document_store = {}
-except Exception as e:
-    st.error(f"Error loading document store: {e}")
-    document_store = {}
-    
+# Get credentials from environment variables
+aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
+aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+openai_api_key = os.environ.get('OPENAI_API_KEY')
+
 # Setup OpenAI API Key
 try:
-    openai.api_key = st.secrets["OPENAI_API_KEY"]
+    openai.api_key = st.secrets.get("OPENAI_API_KEY", openai_api_key)
 except (KeyError, AttributeError, RuntimeError, Exception):
-    openai.api_key = os.environ.get("OPENAI_API_KEY")
+    openai.api_key = openai_api_key
+
+# Constants
+AWS_BUCKET_NAME = 'hcmbotknowledgesource'
+DOCUMENT_STORE_FILE = 'document_store.pkl'
+
+# Load the document store from S3 or local file
+@st.cache_resource
+def load_document_store():
+    try:
+        # Try to download from S3 first
+        s3 = boto3.client(
+            's3',
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key
+        )
+        try:
+            s3.download_file(AWS_BUCKET_NAME, DOCUMENT_STORE_FILE, DOCUMENT_STORE_FILE)
+            print(f"Downloaded document store from S3")
+        except Exception as e:
+            print(f"Could not download from S3: {e}")
+        
+        # Load from local file
+        with open(DOCUMENT_STORE_FILE, 'rb') as f:
+            document_store = pickle.load(f)
+            print(f"Document store loaded with {len(document_store)} documents")
+            return document_store
+    except FileNotFoundError:
+        st.error("Error: The document store file was not found.")
+        return {}
+    except Exception as e:
+        st.error(f"Error loading document store: {e}")
+        return {}
+
+# Load document store
+document_store = load_document_store()
 
 # Cosine similarity function for comparing embeddings with improved numerical stability
 def cosine_similarity(vec1, vec2):
@@ -41,7 +67,7 @@ def generate_embeddings(texts, batch_size=10):
         batch = texts[i:i + batch_size]
         try:
             response = openai.Embedding.create(
-                model="text-embedding-ada-002",
+                model="text-embedding-3-small",
                 input=batch
             )
             embeddings.extend([embedding["embedding"] for embedding in response["data"]])
@@ -99,9 +125,6 @@ def retrieve_relevant_chunks(query, top_k=5):
 def chat_with_assistant(query):
     with st.spinner("Retrieving relevant information..."):
         relevant_chunks = retrieve_relevant_chunks(query)
-        print(f"Relevant chunks for query '{query}':")
-        for chunk, doc in relevant_chunks:
-            print(f"Source ({doc}): {chunk}")
         context = "\n\n".join([f"Source ({doc}): {chunk}" for chunk, doc in relevant_chunks])
 
     with st.spinner("Generating response..."):
@@ -129,13 +152,6 @@ def chat_with_assistant(query):
         )
     
     answer = response.choices[0].message.content.strip()
-
-    # Store query and response in MongoDB
-    #collection.insert_one({
-    #   "query": query,
-    #  "response": answer
-    #})
-
     return answer
 
 # Streamlit interface
