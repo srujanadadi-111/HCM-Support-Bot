@@ -37,11 +37,11 @@ jobs:
           echo "Installed packages:"
           pip list
 
-      - name: Run slackintegrationgit.py and capture output
+      - name: Run slackintegration.py and capture output
         id: slack
         run: |
-          # Modify slackintegrationgit.py to also create a pickle file
-          cat > slackintegrationgit.py << 'EOL'
+          # Create slackintegration.py script
+          cat > slackintegration.py << 'EOL'
           import os
           import time
           import datetime
@@ -149,25 +149,31 @@ jobs:
               print(f"Uploaded {filename} to s3://hcmbotknowledgesource/slack_pdfs/{filename}")
 
           # --- CREATE PICKLE FILE ---
-          def create_pickle_file(messages, filename):
+          def create_slack_pickle(messages, base_filename):
               # Create a simple structure for the pickle file
+              today_date = datetime.datetime.now().strftime('%Y-%m-%d')
+              pkl_filename = f"slack_data_{today_date}.pkl"
+              
+              # Extract just the text for chunks
+              chunks = [msg.get('text', '') for msg in messages]
+              
+              # Create the data structure
               data = {
-                  filename.replace('.pdf', '.pkl'): {
-                      "chunks": [msg.get('text', '') for msg in messages],
-                      "embeddings": [],  # Will be populated by chromaraggit.py
+                  f"slack_{today_date}": {
+                      "chunks": chunks,
+                      "embeddings": [],  # Will be populated by chromarag.py
                       "source": "slack_pdf",
-                      "original_filename": filename
+                      "original_filename": base_filename
                   }
               }
               
               # Save as pickle
-              pkl_filename = filename.replace('.pdf', '.pkl')
               with open(pkl_filename, 'wb') as f:
                   pickle.dump(data, f)
               
               # Upload to S3
               upload_to_s3(pkl_filename, 'application/octet-stream')
-              print(f"Created and uploaded pickle file {pkl_filename}")
+              print(f"Created and uploaded slack pickle file {pkl_filename}")
               
               return pkl_filename
 
@@ -185,31 +191,38 @@ jobs:
 
               if messages:
                   # Generate PDF
-                  filename = f"hcmsupportbot_{now.strftime('%Y-%m-%d')}.pdf"
-                  save_to_pdf(messages, filename)
+                  today_date = now.strftime('%Y-%m-%d')
+                  pdf_filename = f"hcmsupportbot_{today_date}.pdf"
+                  save_to_pdf(messages, pdf_filename)
 
                   # Upload PDF to S3
-                  upload_to_s3(filename)
+                  upload_to_s3(pdf_filename)
                   
                   # Create and upload pickle file
-                  pkl_filename = create_pickle_file(messages, filename)
+                  pkl_filename = create_slack_pickle(messages, pdf_filename)
                   
-                  print(f"Successfully processed {len(messages)} messages and created {filename} and {pkl_filename}")
-                  return filename
+                  print(f"Successfully processed {len(messages)} messages")
+                  print(f"Created PDF: {pdf_filename}")
+                  print(f"Created pickle: {pkl_filename}")
+                  
+                  return pdf_filename, pkl_filename
               else:
                   print("No messages found for today.")
-                  return None
+                  return None, None
 
           if __name__ == "__main__":
               main()
           EOL
           
-          # Run the modified script
-          python slackintegrationgit.py | tee slack_output.log
+          # Run the script
+          python slackintegration.py | tee slack_output.log
           
           # Check if PDF was generated and uploaded
           if grep -q "Uploaded hcmsupportbot_" slack_output.log; then
             echo "pdf_status=generated" >> $GITHUB_OUTPUT
+            # Extract the pickle filename from the output
+            PICKLE_FILE=$(grep "Created pickle:" slack_output.log | awk '{print $3}')
+            echo "pickle_file=${PICKLE_FILE}" >> $GITHUB_OUTPUT
           elif grep -q "No messages found for today." slack_output.log; then
             echo "pdf_status=none" >> $GITHUB_OUTPUT
           else
@@ -220,62 +233,66 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
-      - name: Use repository's documen_store_og.pkl for first run
+      - name: Prepare document store
         run: |
-          if [ -f "documen_store_og.pkl" ]; then
-            cp documen_store_og.pkl document_store.pkl
-            echo "Using documen_store_og.pkl from repository as initial document store"
-          else
-            python -c "
-            import boto3
-            import os
-            
-            # Try to download from S3 if local file doesn't exist
-            s3 = boto3.client('s3')
-            try:
-                s3.download_file('hcmbotknowledgesource', 'document_store.pkl', 'document_store.pkl')
-                print('Downloaded existing document store from S3')
-            except Exception as e:
-                print(f'Could not download document store: {e}')
-            "
-          fi
+          # First check if we already have a document store in S3
+          python -c "
+          import boto3
+          import os
+          import pickle
+          
+          # Get credentials
+          aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
+          aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+          
+          # Create S3 client
+          s3 = boto3.client(
+              's3',
+              aws_access_key_id=aws_access_key_id,
+              aws_secret_access_key=aws_secret_access_key
+          )
+          
+          try:
+              # Try to download existing document store from S3
+              s3.download_file('hcmbotknowledgesource', 'document_store.pkl', 'document_store.pkl')
+              print('Downloaded existing document store from S3')
+          except Exception as e:
+              # If not available, use the base document store from repo
+              if os.path.exists('documen_store_og.pkl'):
+                  # Load the original store
+                  with open('documen_store_og.pkl', 'rb') as f:
+                      doc_store = pickle.load(f)
+                  
+                  # Save as the working document store
+                  with open('document_store.pkl', 'wb') as f:
+                      pickle.dump(doc_store, f)
+                  
+                  print('Using documen_store_og.pkl from repository as initial document store')
+              else:
+                  print(f'Could not download document store and documen_store_og.pkl not found: {e}')
+          "
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-      - name: Run chromaraggit.py
+      - name: Process and append slack data
         if: steps.slack.outputs.pdf_status == 'generated'
         run: |
-          # Create modified chromaraggit.py that appends new slack pkl to existing store
-          cat > chromaraggit.py << 'EOL'
+          # Create chromarag.py script to process and append slack data
+          cat > chromarag.py << 'EOL'
           import os
           import pickle
-          import boto3
-          import glob
           import numpy as np
           import openai
-          from datetime import datetime
-
+          
           # Get credentials from environment variables
           aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
           aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
           openai_api_key = os.environ.get('OPENAI_API_KEY')
-
+          
           # Set OpenAI API key
           openai.api_key = openai_api_key
-
-          # Constants
-          AWS_BUCKET_NAME = 'hcmbotknowledgesource'
-          DOCUMENT_STORE_FILE = 'document_store.pkl'
-
-          def get_s3_client():
-              """Create and return an S3 client using environment variables"""
-              return boto3.client(
-                  's3',
-                  aws_access_key_id=aws_access_key_id,
-                  aws_secret_access_key=aws_secret_access_key
-              )
-
+          
           def generate_embeddings(texts, batch_size=10):
               """Generate embeddings for text chunks using OpenAI API"""
               if not texts:
@@ -293,96 +310,66 @@ jobs:
                   except Exception as e:
                       print(f"Error generating embeddings for batch {i}-{i+batch_size}: {e}")
               return embeddings
-
-          def load_document_store():
-              """Load the existing document store"""
+          
+          def process_and_append_slack_data(slack_pickle_file, document_store_file):
+              # Load the document store
               try:
-                  with open(DOCUMENT_STORE_FILE, 'rb') as f:
-                      return pickle.load(f)
+                  with open(document_store_file, 'rb') as f:
+                      document_store = pickle.load(f)
+                  print(f"Loaded document store with {len(document_store)} documents")
               except Exception as e:
                   print(f"Error loading document store: {e}")
-                  return {}
-
-          def find_latest_slack_pickle():
-              """Find the latest slack pickle file"""
-              # Look for local pickle files first
-              pickle_files = glob.glob("hcmsupportbot_*.pkl")
+                  return False
               
-              if pickle_files:
-                  # Return the most recent one
-                  return max(pickle_files)
-              
-              # If no local files, try downloading from S3
-              s3 = get_s3_client()
+              # Load the slack pickle
               try:
-                  response = s3.list_objects_v2(
-                      Bucket=AWS_BUCKET_NAME,
-                      Prefix='slack_pdfs/hcmsupportbot_',
-                      MaxKeys=10
-                  )
-                  
-                  if 'Contents' in response:
-                      # Find the most recent file
-                      latest_file = max(response['Contents'], key=lambda x: x['LastModified'])
-                      key = latest_file['Key']
-                      
-                      # Download the file
-                      local_filename = os.path.basename(key)
-                      s3.download_file(AWS_BUCKET_NAME, key, local_filename)
-                      print(f"Downloaded {key} to {local_filename}")
-                      return local_filename
+                  with open(slack_pickle_file, 'rb') as f:
+                      slack_data = pickle.load(f)
+                  print(f"Loaded slack data with {len(slack_data)} entries")
               except Exception as e:
-                  print(f"Error finding slack pickle in S3: {e}")
+                  print(f"Error loading slack pickle: {e}")
+                  return False
               
-              return None
-
-          def main():
-              # Load existing document store
-              document_store = load_document_store()
-              print(f"Loaded document store with {len(document_store)} documents")
+              # Process each document in the slack data
+              for doc_name, doc_data in slack_data.items():
+                  chunks = doc_data.get("chunks", [])
+                  if chunks:
+                      print(f"Generating embeddings for {len(chunks)} chunks in {doc_name}")
+                      embeddings = generate_embeddings(chunks)
+                      
+                      # Update the embeddings in the slack data
+                      doc_data["embeddings"] = embeddings
+                      print(f"Generated {len(embeddings)} embeddings for {doc_name}")
+                  else:
+                      print(f"No chunks found in {doc_name}")
               
-              # Find the latest slack pickle file
-              slack_pickle = find_latest_slack_pickle()
+              # Append the processed slack data to the document store
+              document_store.update(slack_data)
+              print(f"Updated document store, now has {len(document_store)} documents")
               
-              if slack_pickle:
-                  try:
-                      # Load the slack pickle
-                      with open(slack_pickle, 'rb') as f:
-                          slack_data = pickle.load(f)
-                      
-                      print(f"Loaded slack pickle with {len(slack_data)} documents")
-                      
-                      # Generate embeddings for each chunk in the slack data
-                      for doc_name, doc_data in slack_data.items():
-                          chunks = doc_data.get("chunks", [])
-                          print(f"Generating embeddings for {len(chunks)} chunks in {doc_name}")
-                          embeddings = generate_embeddings(chunks)
-                          doc_data["embeddings"] = embeddings
-                      
-                      # Update the document store with the slack data
-                      document_store.update(slack_data)
-                      print(f"Updated document store, now has {len(document_store)} documents")
-                      
-                      # Save the updated document store
-                      with open(DOCUMENT_STORE_FILE, 'wb') as f:
-                          pickle.dump(document_store, f)
-                      
-                      # Upload to S3
-                      s3 = get_s3_client()
-                      s3.upload_file(DOCUMENT_STORE_FILE, AWS_BUCKET_NAME, DOCUMENT_STORE_FILE)
-                      print(f"Uploaded updated document store to S3")
-                      
-                  except Exception as e:
-                      print(f"Error processing slack pickle: {e}")
-              else:
-                  print("No slack pickle file found")
-
+              # Save the updated document store
+              with open(document_store_file, 'wb') as f:
+                  pickle.dump(document_store, f)
+              print(f"Saved updated document store to {document_store_file}")
+              
+              return True
+          
           if __name__ == "__main__":
-              main()
+              import sys
+              
+              if len(sys.argv) < 3:
+                  print("Usage: python chromarag.py <slack_pickle_file> <document_store_file>")
+                  sys.exit(1)
+              
+              slack_pickle_file = sys.argv[1]
+              document_store_file = sys.argv[2]
+              
+              success = process_and_append_slack_data(slack_pickle_file, document_store_file)
+              sys.exit(0 if success else 1)
           EOL
           
-          # Run the modified script
-          python chromaraggit.py
+          # Run the script with the pickle file from the previous step
+          python chromarag.py "${{ steps.slack.outputs.pickle_file }}" "document_store.pkl"
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
