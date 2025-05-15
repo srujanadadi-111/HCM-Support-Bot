@@ -23,12 +23,12 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install slack_sdk reportlab boto3 pymupdf python-pptx openpyxl nltk openai==0.28
 
-      - name: Run slackintegrationgit.py and capture output
+      - name: Run slackintegration.py and capture output
         id: slack
         run: |
-          python slackintegrationgit.py | tee slack_output.log
+          python slackintegration.py | tee slack_output.log
           # Check if PDF was generated and uploaded
           if grep -q "Uploaded hcmsupportbot_" slack_output.log; then
             echo "pdf_status=generated" >> $GITHUB_OUTPUT
@@ -42,17 +42,20 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
-      - name: Delete existing documen_store.pkl
+      - name: Download existing document store from S3
         run: |
-          if [ -f documen_store.pkl ]; then
-            rm documen_store.pkl
-            git config --local user.email "github-actions[bot]@users.noreply.github.com"
-            git config --local user.name "github-actions[bot]"
-            git add -u documen_store.pkl
-            git commit -m "Delete documen_store.pkl"
-            git pull --rebase origin main
-            git push
-          fi
+          python -c "
+          import boto3
+          s3 = boto3.client('s3')
+          try:
+              s3.download_file('hcmbotknowledgesource', 'document_store.pkl', 'document_store.pkl')
+              print('Downloaded existing document store from S3')
+          except Exception as e:
+              print(f'Could not download document store: {e}')
+          "
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
       - name: Run chromaraggit.py
         if: steps.slack.outputs.pdf_status == 'generated'
@@ -60,53 +63,35 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
-      - name: Run app.py
+      - name: Upload updated document store to S3
         if: steps.slack.outputs.pdf_status == 'generated'
-        run: python app.py
+        run: |
+          python -c "
+          import boto3
+          s3 = boto3.client('s3')
+          try:
+              s3.upload_file('document_store.pkl', 'hcmbotknowledgesource', 'document_store.pkl')
+              print('Uploaded updated document store to S3')
+          except Exception as e:
+              print(f'Could not upload document store: {e}')
+          "
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
-      - name: Commit and push changes
-        if: steps.slack.outputs.pdf_status == 'generated'
+      - name: Create .gitignore
         run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-  
           # Create or update .gitignore to exclude temporary files
           if [ ! -f .gitignore ]; then
             echo "pdfs2/" > .gitignore
             echo "slack_output.log" >> .gitignore
             echo "*.log" >> .gitignore
+            echo "*.pkl" >> .gitignore
           else
             grep -q "pdfs2/" .gitignore || echo "pdfs2/" >> .gitignore
             grep -q "slack_output.log" .gitignore || echo "slack_output.log" >> .gitignore
             grep -q "*.log" .gitignore || echo "*.log" >> .gitignore
+            grep -q "*.pkl" .gitignore || echo "*.pkl" >> .gitignore
           fi
-
-          # Add .gitignore first
-          git add .gitignore
-  
-          # Check if documen_store.pkl exists and has changes
-          if [ -f documen_store_og.pkl ]; then
-            git add documen_store_og.pkl
-    
-            # Check if there are changes to commit
-            if git diff --staged --quiet; then
-              echo "No changes to commit in documen_store.pkl"
-              exit 0
-            else
-              git commit -m "Update document store $(date)"
-              git push
-            fi
-          else
-            echo "documen_store_og.pkl file not found"
-            exit 1
-          fi
-
-         
