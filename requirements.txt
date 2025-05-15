@@ -11,4 +11,3 @@ slack_sdk
 reportlab
 boto3
 chromadb
-numpy
