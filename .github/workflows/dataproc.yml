@@ -37,11 +37,9 @@ jobs:
           echo "Installed packages:"
           pip list
 
-      - name: Run slackintegration.py and capture output
-        id: slack
+      - name: Create slackintegration.py
         run: |
-          # Create slackintegration.py script
-          cat > slackintegration.py << EOL
+          cat > slackintegration.py << 'EOF'
           import os
           import time
           import datetime
@@ -122,7 +120,7 @@ jobs:
           def save_to_pdf(messages, filename):
               doc = SimpleDocTemplate(filename, pagesize=letter)
               flowables = []
-              header_text = f"Daily #hcmsupportbot Messages\\n{datetime.datetime.now().strftime('%Y-%m-%d')}"
+              header_text = f"Daily #hcmsupportbot Messages\n{datetime.datetime.now().strftime('%Y-%m-%d')}"
               flowables.append(Paragraph(header_text, style_header))
 
               for msg in messages:
@@ -208,8 +206,11 @@ jobs:
 
           if __name__ == "__main__":
               main()
-EOL
-          
+          EOF
+
+      - name: Run slackintegration.py and capture output
+        id: slack
+        run: |
           # Run the script
           python slackintegration.py | tee slack_output.log
           
@@ -272,11 +273,10 @@ EOL
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-      - name: Process and append slack data
+      - name: Create chromarag.py
         if: steps.slack.outputs.pdf_status == 'generated'
         run: |
-          # Create chromarag.py script to process and append slack data
-          cat > chromarag.py << EOL
+          cat > chromarag.py << 'EOF'
           import os
           import pickle
           import numpy as np
@@ -363,8 +363,11 @@ EOL
               
               success = process_and_append_slack_data(slack_pickle_file, document_store_file)
               sys.exit(0 if success else 1)
-EOL
-          
+          EOF
+
+      - name: Process and append slack data
+        if: steps.slack.outputs.pdf_status == 'generated'
+        run: |
           # Run the script with the temporary slack file from the previous step
           python chromarag.py "${{ steps.slack.outputs.temp_slack_file }}" "document_store.pkl"
         env:
